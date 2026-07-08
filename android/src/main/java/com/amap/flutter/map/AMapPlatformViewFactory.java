@@ -39,17 +39,13 @@ class AMapPlatformViewFactory extends PlatformViewFactory {
     public PlatformView create(Context context, int viewId, Object args) {
         final AMapOptionsBuilder builder = new AMapOptionsBuilder();
         try {
-<<<<<<< Updated upstream
-=======
             Map<String, Object> params = args instanceof Map
                     ? (Map<String, Object>) args
                     : Collections.<String, Object>emptyMap();
             if (params.containsKey("debugMode")) {
                 LogUtil.isDebugMode = ConvertUtil.toBoolean(params.get("debugMode"));
             }
-
             ConvertUtil.initialize(context);
->>>>>>> Stashed changes
             ConvertUtil.density = context.getResources().getDisplayMetrics().density;
 
             LogUtil.i(CLASS_NAME, "create params==>" + params);

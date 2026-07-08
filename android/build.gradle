@@ -8,7 +8,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.5.4'
+        classpath 'com.android.tools.build:gradle:8.9.0'
     }
 }
 
@@ -23,20 +23,21 @@ apply plugin: 'com.android.library'
 
 android {
     namespace = "com.amap.flutter.map"
-    compileSdkVersion 35
+    compileSdk 35
 
     defaultConfig {
-        minSdkVersion 21
+        minSdk 21
+        consumerProguardFiles 'consumer-rules.pro'
+//        proguardFiles 'proguard-rules.pro'
     }
-    lintOptions {
+    lint {
         disable 'InvalidPackage'
     }
 }
 
 dependencies {
-    implementation 'com.amap.api:3dmap-location-search:10.1.200_loc6.4.9_sea9.7.4'
+    implementation 'com.amap.api:3dmap-location-search:11.2.000_loc11.2.000_sea9.8.0'
     implementation 'androidx.annotation:annotation:1.9.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.16'
 }
-
