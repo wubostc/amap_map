@@ -46,6 +46,7 @@ class AMapPlatformViewFactory extends PlatformViewFactory {
                 LogUtil.isDebugMode = ConvertUtil.toBoolean(params.get("debugMode"));
             }
             ConvertUtil.initialize(context);
+
             ConvertUtil.density = context.getResources().getDisplayMetrics().density;
 
             LogUtil.i(CLASS_NAME, "create params==>" + params);
