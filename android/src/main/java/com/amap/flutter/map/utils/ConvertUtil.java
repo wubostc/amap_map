@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.loader.FlutterLoader;
 
 /**
@@ -52,12 +53,8 @@ public class ConvertUtil {
     private static final MarkerIconDescriptorFactory markerIconDescriptorFactory = new MarkerIconDescriptorFactory();
 
     public static void initialize(Context context) {
-<<<<<<< Updated upstream
-        flutterLoader = new FlutterLoader();
-=======
         ConvertUtil.context = context.getApplicationContext() == null ? context : context.getApplicationContext();
         flutterLoader = FlutterInjector.instance().flutterLoader();
->>>>>>> Stashed changes
         if (!flutterLoader.initialized()) {
             flutterLoader.startInitialization(context);
             flutterLoader.ensureInitializationComplete(context, null);
