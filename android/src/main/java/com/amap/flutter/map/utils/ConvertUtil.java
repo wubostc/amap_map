@@ -22,7 +22,10 @@ import com.amap.api.maps.model.LatLngBounds;
 import com.amap.api.maps.model.MyLocationStyle;
 import com.amap.api.maps.model.Poi;
 import com.amap.flutter.map.core.AMapOptionsSink;
+import com.amap.flutter.map.overlays.marker.MarkerIconDescriptorFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,15 +46,29 @@ public class ConvertUtil {
     private static final String CLASS_NAME = "ConvertUtil";
     private static final int[] LocationTypeMap = new int[]{MyLocationStyle.LOCATION_TYPE_SHOW, MyLocationStyle.LOCATION_TYPE_FOLLOW, MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE};
     public static float density;
+    private static Context context;
     private static String apiKey;
     private static FlutterLoader flutterLoader;  // For asset loading
+    private static final MarkerIconDescriptorFactory markerIconDescriptorFactory = new MarkerIconDescriptorFactory();
 
     public static void initialize(Context context) {
+<<<<<<< Updated upstream
         flutterLoader = new FlutterLoader();
+=======
+        ConvertUtil.context = context.getApplicationContext() == null ? context : context.getApplicationContext();
+        flutterLoader = FlutterInjector.instance().flutterLoader();
+>>>>>>> Stashed changes
         if (!flutterLoader.initialized()) {
             flutterLoader.startInitialization(context);
             flutterLoader.ensureInitializationComplete(context, null);
         }
+    }
+
+    public static Context getContext() {
+        if (context == null) {
+            throw new IllegalStateException("ConvertUtil has not been initialized.");
+        }
+        return context;
     }
 
     public static void setPrivacyStatement(Context context, Object object) {
@@ -399,16 +416,22 @@ public class ConvertUtil {
             case "defaultMarker":
                 if (data.size() == 1) {
                     return BitmapDescriptorFactory.defaultMarker();
-                } else {
+                } else if (data.size() == 2) {
                     return BitmapDescriptorFactory.defaultMarker(toFloat(data.get(1)));
+                } else {
+                    throw new IllegalArgumentException(
+                            "'defaultMarker' Expected exactly 1 or 2 arguments, got: " + data.size());
                 }
             case "fromAsset":
                 if (data.size() == 2) {
                     return BitmapDescriptorFactory.fromAsset(
                             flutterLoader.getLookupKeyForAsset(toString(data.get(1))));
-                } else {
+                } else if (data.size() == 3) {
                     return BitmapDescriptorFactory.fromAsset(
                             flutterLoader.getLookupKeyForAsset(toString(data.get(1)), toString(data.get(2))));
+                } else {
+                    throw new IllegalArgumentException(
+                            "'fromAsset' Expected exactly 2 or 3 arguments, got: " + data.size());
                 }
             case "fromAssetImage":
                 if (data.size() == 3) {
@@ -420,8 +443,33 @@ public class ConvertUtil {
                 }
             case "fromBytes":
                 return getBitmapFromBytes(data);
+            case "fromJsonIcon":
+                if (data.size() != 2) {
+                    throw new IllegalArgumentException(
+                            "'fromJsonIcon' Expected exactly 2 arguments, got: " + data.size());
+                }
+                final MarkerIconDescriptorFactory.MarkerIcon markerIcon =
+                        markerIconDescriptorFactory.create(getContext(), data.get(1));
+                return markerIcon.descriptor;
             default:
                 throw new IllegalArgumentException("Cannot interpret " + o + " as BitmapDescriptor");
+        }
+    }
+
+    public static Bitmap toBitmapFromImageSource(Object o) {
+        final List<?> data = toList(o);
+        switch (toString(data.get(0))) {
+            case "fromAsset":
+                if (data.size() == 2) {
+                    return toBitmapFromAsset(flutterLoader.getLookupKeyForAsset(toString(data.get(1))));
+                } else if (data.size() == 3) {
+                    return toBitmapFromAsset(flutterLoader.getLookupKeyForAsset(toString(data.get(1)), toString(data.get(2))));
+                } else {
+                    throw new IllegalArgumentException(
+                            "'fromAsset' Expected exactly 2 or 3 arguments, got: " + data.size());
+                }
+            default:
+                throw new IllegalArgumentException("Cannot interpret " + o + " as image source");
         }
     }
 
@@ -455,6 +503,27 @@ public class ConvertUtil {
             throw new IllegalArgumentException("Unable to decode bytes as a valid bitmap.");
         } else {
             return bitmap;
+        }
+    }
+
+    private static Bitmap toBitmapFromAsset(String assetKey) {
+        InputStream inputStream = null;
+        try {
+            inputStream = getContext().getAssets().open(assetKey);
+            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+            if (bitmap == null) {
+                throw new IllegalArgumentException("Unable to decode asset as a valid bitmap: " + assetKey);
+            }
+            return bitmap;
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Unable to load asset: " + assetKey, e);
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 

@@ -16,7 +16,7 @@ A new Flutter plugin for AMap.
   s.source_files = 'Classes/**/*'
   s.public_header_files = 'Classes/**/*.h'
   s.dependency 'Flutter'
-  s.dependency 'AMap3DMap'
+  s.dependency 'AMap3DMap', '11.2.000'
   s.static_framework = true
   s.platform = :ios, '12.0'
 

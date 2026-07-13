@@ -111,11 +111,12 @@ class AMapOptionsBuilder implements AMapOptionsSink, UISettingsSink {
             }
 
             aMapPlatformView.getMapController().setMapLanguage(mapLanguage);
+            LogUtil.i(CLASS_NAME, "<build>");
             return aMapPlatformView;
         } catch (Throwable e) {
-            LogUtil.e(CLASS_NAME, "build", e);
+            LogUtil.e(CLASS_NAME, "<build>", e);
+            throw e;
         }
-        return null;
     }
 
     @Override

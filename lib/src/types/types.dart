@@ -14,6 +14,7 @@ export 'camera.dart';
 export 'ui.dart';
 export 'base_overlay.dart';
 export 'marker.dart';
+export 'amap_marker_icon_json.dart';
 export 'marker_updates.dart';
 export 'polyline.dart';
 export 'polyline_updates.dart';

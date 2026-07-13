@@ -19,6 +19,13 @@ public class MarkerUtil {
             return null;
         }
         final Map<?, ?> data = ConvertUtil.toMap(o);
+
+        final String markerId = (String) data.get("id");
+        if (markerId == null) {
+            throw new IllegalArgumentException("markerId was null");
+        }
+
+
         final Object alpha = data.get("alpha");
         if (alpha != null) {
             sink.setAlpha(ConvertUtil.toFloat(alpha));
@@ -74,12 +81,7 @@ public class MarkerUtil {
             sink.setClickable(ConvertUtil.toBoolean(clickable));
         }
 
-        final String markerId = (String) data.get("id");
-        if (markerId == null) {
-            throw new IllegalArgumentException("markerId was null");
-        } else {
-            return markerId;
-        }
+        return markerId;
     }
 
     private static void interpretInfoWindowOptions(

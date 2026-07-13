@@ -6,6 +6,7 @@
 //
 
 #import "AMapConvertUtil.h"
+#import "../OverlayController/MarkerIcon/AMapMarkerIconJsonRenderer.h"
 
 @implementation AMapConvertUtil
 
@@ -140,6 +141,18 @@
                                                            userInfo:nil];
             @throw exception;
         }
+    } else if ([iconData.firstObject isEqualToString:@"fromJsonIcon"]) {
+        if (iconData.count == 2 && [iconData[1] isKindOfClass:[NSDictionary class]]) {
+            image = [AMapMarkerIconJsonRenderer imageFromRegistrar:registrar iconMap:iconData[1]];
+        } else {
+            NSString* error =
+            [NSString stringWithFormat:@"'fromJsonIcon' should have exactly 2 arguments. Got: %lu",
+             (unsigned long)iconData.count];
+            NSException* exception = [NSException exceptionWithName:@"InvalidBitmapDescriptor"
+                                                             reason:error
+                                                           userInfo:nil];
+            @throw exception;
+        }
     }
     
     return image;
@@ -163,8 +176,15 @@
             if (fabs([previousIcon[index] doubleValue] - [currentIcon[index] doubleValue]) > 0.000001) {
                 return YES;
             }
-        } else {//其它数据无法比较，直接默认强制更新
-            return NO;
+        } else if ([previousIcon[index] isKindOfClass:[NSDictionary class]] ||
+                   [previousIcon[index] isKindOfClass:[NSArray class]]) {
+            if ([previousIcon[index] isEqual:currentIcon[index]] == NO) {
+                return YES;
+            }
+        } else {
+            if ([previousIcon[index] isEqual:currentIcon[index]] == NO) {
+                return YES;
+            }
         }
     }
     return NO;

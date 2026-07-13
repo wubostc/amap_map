@@ -13,6 +13,8 @@ import 'package:flutter/services.dart' show AssetBundle;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import 'amap_marker_icon_json.dart';
+
 /// Bitmap工具类
 class BitmapDescriptor {
   const BitmapDescriptor._(this._json);
@@ -91,6 +93,14 @@ class BitmapDescriptor {
     ]);
   }
 
+  /// 根据强类型 JSON 视图描述创建 marker 图标。
+  static BitmapDescriptor fromJsonIcon(MarkerRenderIcon iconJson) {
+    return BitmapDescriptor._(<dynamic>[
+      'fromJsonIcon',
+      iconJson.toJson(),
+    ]);
+  }
+
   ///从资源图像创建[BitmapDescriptor]。
   ///
   ///Flutter中的assert的资产图像按以下方式存储：
@@ -122,7 +132,7 @@ class BitmapDescriptor {
       assetBundleImageKey.name,
       assetBundleImageKey.scale,
       if (kIsWeb && size != null)
-        [
+        <double>[
           size.width,
           size.height,
         ],
