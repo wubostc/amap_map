@@ -28,6 +28,9 @@ class Polygon extends BaseOverlay {
   /// 连接点类型,该参数不支持copy时修改，仅能在初始化时设置一次
   final JoinType joinType;
 
+  /// 点击回调（回调参数为id）
+  final ArgumentCallback<String>? onTap;
+
   /// 默认构造函数
   Polygon(
       {required List<LatLng> points,
@@ -35,7 +38,8 @@ class Polygon extends BaseOverlay {
       this.strokeColor = const Color(0xCC00BFFF),
       this.fillColor = const Color(0xC487CEFA),
       this.visible = true,
-      this.joinType = JoinType.bevel})
+      this.joinType = JoinType.bevel,
+      this.onTap})
       : assert(points.isNotEmpty),
         points = List<LatLng>.of(points),
         super();
@@ -47,6 +51,7 @@ class Polygon extends BaseOverlay {
     Color? strokeColor,
     Color? fillColor,
     bool? visible,
+    ArgumentCallback<String>? onTap,
   }) {
     Polygon copyPolyline = Polygon(
       points: List<LatLng>.of(points ?? this.points),
@@ -55,6 +60,7 @@ class Polygon extends BaseOverlay {
       fillColor: fillColor ?? this.fillColor,
       visible: visible ?? this.visible,
       joinType: joinType,
+      onTap: onTap ?? this.onTap,
     );
     copyPolyline.setIdForCopy(id);
     return copyPolyline;

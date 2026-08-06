@@ -22,6 +22,7 @@ dependencies:
   plugin_platform_interface: ^2.1.8
   stream_transform: ^2.0.0
 
+  turf: ^0.0.12
   x_amap_base: ^1.0.3
   x_common: ^1.0.4
 

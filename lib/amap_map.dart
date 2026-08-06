@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:turf/turf.dart' as turf;
 
 import 'src/types/marker_updates.dart';
 import 'src/types/polygon_updates.dart';
