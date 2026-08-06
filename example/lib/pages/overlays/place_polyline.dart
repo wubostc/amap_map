@@ -75,7 +75,7 @@ class _State extends State<PolylineDemoPage> {
 
       setState(() {
         _polylines[selectedPolylineId!] =
-            selectedPolyline.copyWith(widthParam: currentWidth);
+            selectedPolyline.copyWith(width: currentWidth);
       });
     } else {
       print('无选中的Polyline，无法修改宽度');
@@ -103,7 +103,7 @@ class _State extends State<PolylineDemoPage> {
 
     setState(() {
       _polylines[selectedPolylineId!] =
-          polyline.copyWith(dashLineTypeParam: currentType);
+          polyline.copyWith(dashLineType: currentType);
     });
   }
 
@@ -119,8 +119,7 @@ class _State extends State<PolylineDemoPage> {
       capType = CapType.butt;
     }
     setState(() {
-      _polylines[selectedPolylineId!] =
-          polyline.copyWith(capTypeParam: capType);
+      _polylines[selectedPolylineId!] = polyline.copyWith(capType: capType);
     });
   }
 
@@ -133,8 +132,7 @@ class _State extends State<PolylineDemoPage> {
       joinType = JoinType.bevel;
     }
     setState(() {
-      _polylines[selectedPolylineId!] =
-          polyline.copyWith(joinTypeParam: joinType);
+      _polylines[selectedPolylineId!] = polyline.copyWith(joinType: joinType);
     });
   }
 
@@ -143,7 +141,7 @@ class _State extends State<PolylineDemoPage> {
     final double current = polyline.alpha;
     setState(() {
       _polylines[selectedPolylineId!] = polyline.copyWith(
-        alphaParam: current < 0.1 ? 1.0 : current * 0.75,
+        alpha: current < 0.1 ? 1.0 : current * 0.75,
       );
     });
   }
@@ -152,7 +150,7 @@ class _State extends State<PolylineDemoPage> {
     final Polyline polyline = _polylines[selectedPolylineId]!;
     setState(() {
       _polylines[selectedPolylineId!] = polyline.copyWith(
-        visibleParam: value,
+        visible: value,
       );
     });
   }
@@ -161,7 +159,7 @@ class _State extends State<PolylineDemoPage> {
     final Polyline polyline = _polylines[selectedPolylineId]!;
     setState(() {
       _polylines[selectedPolylineId!] = polyline.copyWith(
-        colorParam: colors[++colorsIndex % colors.length],
+        color: colors[++colorsIndex % colors.length],
       );
     });
   }
@@ -175,7 +173,7 @@ class _State extends State<PolylineDemoPage> {
 
     setState(() {
       _polylines[selectedPolylineId!] = polyline.copyWith(
-        pointsParam: newPoints,
+        points: newPoints,
       );
     });
   }

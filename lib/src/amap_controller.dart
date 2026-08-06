@@ -18,7 +18,7 @@ final MethodChannelAMapFlutterMap _methodChannel =
 /// 地图通信中心
 class AMapController {
   final int mapId;
-  final _MapState _mapState;
+  final MapState _mapState;
 
   AMapController._(CameraPosition initCameraPosition, this._mapState,
       {required this.mapId}) {
@@ -30,7 +30,7 @@ class AMapController {
   static Future<AMapController> init(
     int id,
     CameraPosition initialCameration,
-    dynamic mapState,
+    MapState mapState,
   ) async {
     await _methodChannel.init(id);
     return AMapController._(
@@ -86,7 +86,7 @@ class AMapController {
     });
   }
 
-  void disponse() {
+  void dispose() {
     _methodChannel.dispose(id: mapId);
   }
 
@@ -147,5 +147,72 @@ class AMapController {
 
   Future<String> getSatelliteImageApprovalNumber() {
     return _methodChannel.getSatelliteImageApprovalNumber(mapId: mapId);
+  }
+
+  /// 设置地图参数
+  Future<void> setMapOptions(AMapOptions optionsUpdate) {
+    return _methodChannel.updateMapOptions(optionsUpdate.toMap(), mapId: mapId);
+  }
+
+  Future<void> setMarker(Marker marker) {
+    if (_mapState.upsertMarker(marker) == null) {
+      return _methodChannel.updateMarkers(MarkerUpdates.add(<Marker>{marker}),
+          mapId: mapId);
+    }
+    return _methodChannel.updateMarkers(MarkerUpdates.change(<Marker>{marker}),
+        mapId: mapId);
+  }
+
+  Future<void> removeMarker(String markerId) {
+    if (_mapState.removeMarker(markerId) != null) {
+      return _methodChannel.updateMarkers(
+          MarkerUpdates.remove(<String>{markerId}),
+          mapId: mapId);
+    }
+
+    return Future<void>.value();
+  }
+
+  Future<void> setPolyline(Polyline polyline) {
+    if (_mapState.upsertPolyline(polyline) == null) {
+      return _methodChannel.updatePolylines(
+          PolylineUpdates.add(<Polyline>{polyline}),
+          mapId: mapId);
+    }
+
+    return _methodChannel.updatePolylines(
+        PolylineUpdates.change(<Polyline>{polyline}),
+        mapId: mapId);
+  }
+
+  Future<void> removePolyline(String polylineId) {
+    if (_mapState.removePolyline(polylineId) != null) {
+      return _methodChannel.updatePolylines(
+          PolylineUpdates.remove(<String>{polylineId}),
+          mapId: mapId);
+    }
+
+    return Future<void>.value();
+  }
+
+  Future<void> setPolygon(Polygon polygon) {
+    if (_mapState.upsertPolygon(polygon) == null) {
+      return _methodChannel
+          .updatePolygons(PolygonUpdates.add(<Polygon>{polygon}), mapId: mapId);
+    }
+
+    return _methodChannel.updatePolygons(
+        PolygonUpdates.change(<Polygon>{polygon}),
+        mapId: mapId);
+  }
+
+  Future<void> removePolygon(String polygonId) {
+    if (_mapState.removePolygon(polygonId) != null) {
+      return _methodChannel.updatePolygons(
+          PolygonUpdates.remove(<String>{polygonId}),
+          mapId: mapId);
+    }
+
+    return Future<void>.value();
   }
 }

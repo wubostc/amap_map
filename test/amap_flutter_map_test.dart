@@ -1,11 +1,76 @@
 import 'package:amap_map/amap_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:x_amap_base/x_amap_base.dart';
 
 void main() {
   // const MethodChannel channel = MethodChannel('amap_map');
 
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('AMapOptions serializes defined values without null fields', () {
+    final AMapOptions options = AMapOptions(
+      mapType: MapType.satellite,
+      buildingsEnabled: false,
+      customStyleOptions: CustomStyleOptions(true),
+      compassEnabled: false,
+      minMaxZoomPreference: const MinMaxZoomPreference(4, 18),
+      trafficEnabled: false,
+      myLocationStyleOptions: MyLocationStyleOptions(false),
+      logoPosition: 2,
+      logoBottomMargin: 3,
+      logoLeftMargin: 4,
+      mapLanguage: MapLanguage.english,
+    );
+
+    expect(options.toMap(), <String, dynamic>{
+      'mapType': MapType.satellite.index,
+      'buildingsEnabled': false,
+      'customStyleOptions': <String, dynamic>{'enabled': true},
+      'compassEnabled': false,
+      'minMaxZoomPreference': <double>[4, 18],
+      'trafficEnabled': false,
+      'myLocationStyle': <String, dynamic>{'enabled': false},
+      'logoPosition': 2,
+      'logoBottomMargin': 3,
+      'logoLeftMargin': 4,
+      'mapLanguage': 'en',
+    });
+  });
+
+  test('Polygon defensively copies points', () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(39.0, 116.0),
+      const LatLng(40.0, 117.0),
+    ];
+    final Polygon polygon = Polygon(points: points);
+
+    points.add(const LatLng(41.0, 118.0));
+
+    expect(polygon.points, hasLength(2));
+
+    final Polygon clone = polygon.clone();
+    polygon.points.add(const LatLng(42.0, 119.0));
+
+    expect(clone.points, hasLength(2));
+  });
+
+  test('Polyline defensively copies points', () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(39.0, 116.0),
+      const LatLng(40.0, 117.0),
+    ];
+    final Polyline polyline = Polyline(points: points);
+
+    points.add(const LatLng(41.0, 118.0));
+
+    expect(polyline.points, hasLength(2));
+
+    final Polyline clone = polyline.clone();
+    polyline.points.add(const LatLng(42.0, 119.0));
+
+    expect(clone.points, hasLength(2));
+  });
 
   // setUp(() {
   //   channel.setMockMethodCallHandler((MethodCall methodCall) async {

@@ -79,7 +79,7 @@ class _State extends State<PolygonDemoPage> {
       //有选中的Polygon
       setState(() {
         _polygons[selectedPolygonId!] =
-            selectedPolygon.copyWith(strokeWidthParam: currentWidth);
+            selectedPolygon.copyWith(strokeWidth: currentWidth);
       });
     } else {
       print('无选中的Polygon，无法修改宽度');
@@ -90,8 +90,8 @@ class _State extends State<PolygonDemoPage> {
     final Polygon polygon = _polygons[selectedPolygonId]!;
     setState(() {
       _polygons[selectedPolygonId!] = polygon.copyWith(
-        strokeColorParam: colors[++colorsIndex % colors.length],
-        fillColorParam: colors[(colorsIndex + 1) % colors.length],
+        strokeColor: colors[++colorsIndex % colors.length],
+        fillColor: colors[(colorsIndex + 1) % colors.length],
       );
     });
   }
@@ -100,7 +100,7 @@ class _State extends State<PolygonDemoPage> {
     final Polygon polygon = _polygons[selectedPolygonId]!;
     setState(() {
       _polygons[selectedPolygonId!] = polygon.copyWith(
-        visibleParam: value,
+        visible: value,
       );
     });
   }
@@ -114,7 +114,7 @@ class _State extends State<PolygonDemoPage> {
 
     setState(() {
       _polygons[selectedPolygonId!] = polygon.copyWith(
-        pointsParam: newPoints,
+        points: newPoints,
       );
     });
   }

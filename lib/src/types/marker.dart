@@ -77,34 +77,6 @@ class InfoWindow {
 
 /// 点覆盖物的类
 class Marker extends BaseOverlay {
-  Marker({
-    required this.position,
-    double alpha = 1.0,
-    Offset anchor = const Offset(0.5, 1.0),
-    this.clickable = true,
-    this.draggable = false,
-    this.icon = BitmapDescriptor.defaultMarker,
-    this.infoWindowEnable = true,
-    this.infoWindow = InfoWindow.noText,
-    this.rotation = 0.0,
-    this.visible = true,
-    this.zIndex = 0.0,
-    this.onTap,
-    this.onDragEnd,
-  })  : alpha =
-            // ignore: unnecessary_null_comparison
-            (alpha != null ? (alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha)) : alpha),
-        // ignore: unnecessary_null_comparison
-        anchor = (anchor == null
-            ? const Offset(0.5, 1.0)
-            : ((anchor.dx < 0 ||
-                    anchor.dx > 1 ||
-                    anchor.dy < 0 ||
-                    anchor.dy > 1)
-                ? const Offset(0.5, 1.0)
-                : anchor)),
-        super();
-
   /// 透明度
   final double alpha;
 
@@ -148,35 +120,57 @@ class Marker extends BaseOverlay {
   /// Marker被拖拽结束的回调
   final MarkerDragEndCallback? onDragEnd;
 
+  Marker({
+    required this.position,
+    double alpha = 1.0,
+    Offset anchor = const Offset(0.5, 1.0),
+    this.clickable = true,
+    this.draggable = false,
+    this.icon = BitmapDescriptor.defaultMarker,
+    this.infoWindowEnable = true,
+    this.infoWindow = InfoWindow.noText,
+    this.rotation = 0.0,
+    this.visible = true,
+    this.zIndex = 0.0,
+    this.onTap,
+    this.onDragEnd,
+  })  : alpha = ((alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha))),
+        anchor =
+            (((anchor.dx < 0 || anchor.dx > 1 || anchor.dy < 0 || anchor.dy > 1)
+                ? const Offset(0.5, 1.0)
+                : anchor)),
+        super();
+
   /// copy的真正复制的参数，主要用于需要修改某个属性参数时使用
   Marker copyWith({
-    double? alphaParam,
-    Offset? anchorParam,
-    bool? clickableParam,
-    bool? draggableParam,
-    BitmapDescriptor? iconParam,
-    bool? infoWindowEnableParam,
-    InfoWindow? infoWindowParam,
-    LatLng? positionParam,
-    double? rotationParam,
-    bool? visibleParam,
-    ArgumentCallback<String?>? onTapParam,
-    MarkerDragEndCallback? onDragEndParam,
+    double? alpha,
+    Offset? anchor,
+    bool? clickable,
+    bool? draggable,
+    BitmapDescriptor? icon,
+    bool? infoWindowEnable,
+    InfoWindow? infoWindow,
+    LatLng? position,
+    double? rotation,
+    bool? visible,
+    double? zIndex,
+    ArgumentCallback<String?>? onTap,
+    MarkerDragEndCallback? onDragEnd,
   }) {
     Marker copyMark = Marker(
-      alpha: alphaParam ?? alpha,
-      anchor: anchorParam ?? anchor,
-      clickable: clickableParam ?? clickable,
-      draggable: draggableParam ?? draggable,
-      icon: iconParam ?? icon,
-      infoWindowEnable: infoWindowEnableParam ?? infoWindowEnable,
-      infoWindow: infoWindowParam ?? infoWindow,
-      position: positionParam ?? position,
-      rotation: rotationParam ?? rotation,
-      visible: visibleParam ?? visible,
-      zIndex: zIndex,
-      onTap: onTapParam ?? onTap,
-      onDragEnd: onDragEndParam ?? onDragEnd,
+      alpha: alpha ?? this.alpha,
+      anchor: anchor ?? this.anchor,
+      clickable: clickable ?? this.clickable,
+      draggable: draggable ?? this.draggable,
+      icon: icon ?? this.icon,
+      infoWindowEnable: infoWindowEnable ?? this.infoWindowEnable,
+      infoWindow: infoWindow ?? this.infoWindow,
+      position: position ?? this.position,
+      rotation: rotation ?? this.rotation,
+      visible: visible ?? this.visible,
+      zIndex: zIndex ?? this.zIndex,
+      onTap: onTap ?? this.onTap,
+      onDragEnd: onDragEnd ?? this.onDragEnd,
     );
     copyMark.setIdForCopy(id);
     return copyMark;
@@ -187,27 +181,20 @@ class Marker extends BaseOverlay {
 
   @override
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> json = <String, dynamic>{};
-
-    void addIfPresent(String fieldName, dynamic value) {
-      if (value != null) {
-        json[fieldName] = value;
-      }
-    }
-
-    addIfPresent('id', id);
-    addIfPresent('alpha', alpha);
-    addIfPresent('anchor', _offsetToJson(anchor));
-    addIfPresent('clickable', clickable);
-    addIfPresent('draggable', draggable);
-    addIfPresent('icon', icon.toMap());
-    addIfPresent('infoWindowEnable', infoWindowEnable);
-    addIfPresent('infoWindow', infoWindow._toMap());
-    addIfPresent('position', position.toJson());
-    addIfPresent('rotation', rotation);
-    addIfPresent('visible', visible);
-    addIfPresent('zIndex', zIndex);
-    return json;
+    return <String, dynamic>{
+      'id': id,
+      'alpha': alpha,
+      'anchor': _offsetToJson(anchor),
+      'clickable': clickable,
+      'draggable': draggable,
+      'icon': icon.toMap(),
+      'infoWindowEnable': infoWindowEnable,
+      'infoWindow': infoWindow._toMap(),
+      'position': position.toJson(),
+      'rotation': rotation,
+      'visible': visible,
+      'zIndex': zIndex,
+    };
   }
 
   dynamic _offsetToJson(Offset offset) {

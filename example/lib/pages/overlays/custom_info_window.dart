@@ -91,7 +91,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     if (selectedMarkerId != null) {
       setState(() {
         _markers[selectedMarkerId!] = marker.copyWith(
-          infoWindowParam: marker.infoWindow.copyWith(
+          infoWindow: marker.infoWindow.copyWith(
             titleParam: newTitle,
           ),
         );
@@ -117,7 +117,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     final Offset newAnchor = Offset(dx, dy);
     setState(() {
       _markers[selectedMarkerId!] = marker.copyWith(
-        anchorParam: newAnchor,
+        anchor: newAnchor,
       );
     });
   }
@@ -131,7 +131,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     );
     setState(() {
       _markers[selectedMarkerId!] = marker.copyWith(
-        positionParam: LatLng(
+        position: LatLng(
           mapCenter.latitude + offset.dy,
           mapCenter.longitude + offset.dx,
         ),
@@ -144,7 +144,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     final double current = marker.alpha;
     setState(() {
       _markers[selectedMarkerId!] = marker.copyWith(
-        alphaParam: current < 0.1 ? 1.0 : current * 0.75,
+        alpha: current < 0.1 ? 1.0 : current * 0.75,
       );
     });
   }
@@ -154,7 +154,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     final double current = marker.rotation;
     setState(() {
       _markers[selectedMarkerId!] = marker.copyWith(
-        rotationParam: current == 330.0 ? 0.0 : current + 30.0,
+        rotation: current == 330.0 ? 0.0 : current + 30.0,
       );
     });
   }
@@ -165,7 +165,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     setState(() {
       showInfoWindow = value;
       _markers[selectedMarkerId!] = marker.copyWith(
-        visibleParam: value,
+        visible: value,
       );
     });
   }
@@ -174,7 +174,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     final Marker marker = _markers[selectedMarkerId]!;
     setState(() {
       _markers[selectedMarkerId!] = marker.copyWith(
-        draggableParam: value,
+        draggable: value,
       );
     });
   }

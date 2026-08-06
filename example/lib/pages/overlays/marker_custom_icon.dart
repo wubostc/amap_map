@@ -36,7 +36,7 @@ class _BodyState extends State<MarkerCustomIconPage> {
     setState(() {
       _iconPath = _iconPath == _startIconPath ? _endIconPath : _startIconPath;
       _initMarkerMap[_currentMarkerId!] =
-          marker.copyWith(iconParam: BitmapDescriptor.fromIconPath(_iconPath));
+          marker.copyWith(icon: BitmapDescriptor.fromIconPath(_iconPath));
     });
   }
 

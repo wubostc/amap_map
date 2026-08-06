@@ -21,6 +21,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:stream_transform/stream_transform.dart';
 
+import '../types/marker_updates.dart';
+import '../types/polygon_updates.dart';
+import '../types/polyline_updates.dart';
 import 'map_event.dart';
 
 // ignore: constant_identifier_names

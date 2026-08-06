@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:amap_map/src/compatibility/color_extensions.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' show Color;
 import 'package:x_amap_base/x_amap_base.dart';
@@ -11,18 +10,6 @@ import 'polyline.dart';
 
 /// 线相关的覆盖物类，内部的属性，描述了覆盖物的纹理、颜色、线宽等特征
 class Polygon extends BaseOverlay {
-  /// 默认构造函数
-  Polygon(
-      {required this.points,
-      double strokeWidth = 10,
-      this.strokeColor = const Color(0xCC00BFFF),
-      this.fillColor = const Color(0xC487CEFA),
-      this.visible = true,
-      this.joinType = JoinType.bevel})
-      : assert(points.isNotEmpty),
-        strokeWidth = (strokeWidth <= 0 ? 10 : strokeWidth),
-        super();
-
   /// 覆盖物的坐标点数组,不能为空
   final List<LatLng> points;
 
@@ -41,20 +28,32 @@ class Polygon extends BaseOverlay {
   /// 连接点类型,该参数不支持copy时修改，仅能在初始化时设置一次
   final JoinType joinType;
 
+  /// 默认构造函数
+  Polygon(
+      {required List<LatLng> points,
+      this.strokeWidth = 10,
+      this.strokeColor = const Color(0xCC00BFFF),
+      this.fillColor = const Color(0xC487CEFA),
+      this.visible = true,
+      this.joinType = JoinType.bevel})
+      : assert(points.isNotEmpty),
+        points = List<LatLng>.of(points),
+        super();
+
   /// 实际copy函数
   Polygon copyWith({
-    List<LatLng>? pointsParam,
-    double? strokeWidthParam,
-    Color? strokeColorParam,
-    Color? fillColorParam,
-    bool? visibleParam,
+    List<LatLng>? points,
+    double? strokeWidth,
+    Color? strokeColor,
+    Color? fillColor,
+    bool? visible,
   }) {
     Polygon copyPolyline = Polygon(
-      points: pointsParam ?? points,
-      strokeWidth: strokeWidthParam ?? strokeWidth,
-      strokeColor: strokeColorParam ?? strokeColor,
-      fillColor: fillColorParam ?? fillColor,
-      visible: visibleParam ?? visible,
+      points: List<LatLng>.of(points ?? this.points),
+      strokeWidth: strokeWidth ?? this.strokeWidth,
+      strokeColor: strokeColor ?? this.strokeColor,
+      fillColor: fillColor ?? this.fillColor,
+      visible: visible ?? this.visible,
       joinType: joinType,
     );
     copyPolyline.setIdForCopy(id);
@@ -67,22 +66,15 @@ class Polygon extends BaseOverlay {
   /// 转换成可以序列化的map
   @override
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> json = <String, dynamic>{};
-
-    void addIfPresent(String fieldName, dynamic value) {
-      if (value != null) {
-        json[fieldName] = value;
-      }
-    }
-
-    addIfPresent('id', id);
-    json['points'] = _pointsToJson();
-    addIfPresent('strokeWidth', strokeWidth);
-    addIfPresent('strokeColor', strokeColor.argbValue);
-    addIfPresent('fillColor', fillColor.argbValue);
-    addIfPresent('visible', visible);
-    addIfPresent('joinType', joinType.index);
-    return json;
+    return <String, dynamic>{
+      'id': id,
+      'points': _pointsToJson(),
+      'strokeWidth': strokeWidth,
+      'strokeColor': strokeColor.toARGB32(),
+      'fillColor': fillColor.toARGB32(),
+      'visible': visible,
+      'joinType': joinType.index,
+    };
   }
 
   @override

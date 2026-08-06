@@ -7,6 +7,15 @@ import 'types.dart';
 
 /// 该类主要用以描述[Polygon]的增删改等更新操作
 class PolygonUpdates {
+  /// 想要添加的polygon对象集合.
+  Set<Polygon>? polygonsToAdd;
+
+  /// 想要删除的polygon的id集合
+  Set<String>? polygonIdsToRemove;
+
+  /// 想要更新的polygon对象集合
+  Set<Polygon>? polygonsToChange;
+
   /// 通过Polygon的前后更新集合构造一个PolygonUpdates
   PolygonUpdates.from(Set<Polygon> previous, Set<Polygon> current) {
     final Map<String, Polygon> previousPolygons = keyByPolygonId(previous);
@@ -43,30 +52,23 @@ class PolygonUpdates {
     polygonsToChange = tempPolygonsToChange;
   }
 
-  /// 想要添加的polygon对象集合.
-  Set<Polygon>? polygonsToAdd;
+  PolygonUpdates.add(Set<Polygon> polygons) : polygonsToAdd = polygons;
 
-  /// 想要删除的polygon的id集合
-  Set<String>? polygonIdsToRemove;
+  PolygonUpdates.remove(Set<String> polygonIds)
+      : polygonIdsToRemove = polygonIds;
 
-  /// 想要更新的polygon对象集合
-  Set<Polygon>? polygonsToChange;
+  PolygonUpdates.change(Set<Polygon> polygons) : polygonsToChange = polygons;
 
   /// 转换成可以序列化的map
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> updateMap = <String, dynamic>{};
-
-    void addIfNonNull(String fieldName, dynamic value) {
-      if (value != null) {
-        updateMap[fieldName] = value;
-      }
-    }
-
-    addIfNonNull('polygonsToAdd', serializeOverlaySet(polygonsToAdd!));
-    addIfNonNull('polygonsToChange', serializeOverlaySet(polygonsToChange!));
-    addIfNonNull('polygonIdsToRemove', polygonIdsToRemove?.toList());
-
-    return updateMap;
+    return <String, dynamic>{
+      if (polygonsToAdd != null)
+        'polygonsToAdd': serializeOverlaySet(polygonsToAdd!),
+      if (polygonsToChange != null)
+        'polygonsToChange': serializeOverlaySet(polygonsToChange!),
+      if (polygonIdsToRemove != null)
+        'polygonIdsToRemove': polygonIdsToRemove!.toList(),
+    };
   }
 
   @override

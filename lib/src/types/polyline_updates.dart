@@ -8,6 +8,15 @@ import 'types.dart';
 
 /// 该类主要用以描述[Polyline]的增删改等更新操作
 class PolylineUpdates {
+  /// 用于添加polyline的集合
+  Set<Polyline>? polylinesToAdd;
+
+  /// 需要删除的plyline的id集合
+  Set<String>? polylineIdsToRemove;
+
+  /// 用于更新polyline的集合
+  Set<Polyline>? polylinesToChange;
+
   /// 通过polyline的前后更新集合构造一个polylineUpdates
   PolylineUpdates.from(Set<Polyline> previous, Set<Polyline> current) {
     final Map<String, Polyline> previousPolylines = keyByPolylineId(previous);
@@ -44,30 +53,24 @@ class PolylineUpdates {
     polylinesToChange = tempPolylinesToChange;
   }
 
-  /// 用于添加polyline的集合
-  Set<Polyline>? polylinesToAdd;
+  PolylineUpdates.add(Set<Polyline> polylines) : polylinesToAdd = polylines;
 
-  /// 需要删除的plyline的id集合
-  Set<String>? polylineIdsToRemove;
+  PolylineUpdates.remove(Set<String> polylineIds)
+      : polylineIdsToRemove = polylineIds;
 
-  /// 用于更新polyline的集合
-  Set<Polyline>? polylinesToChange;
+  PolylineUpdates.change(Set<Polyline> polylines)
+      : polylinesToChange = polylines;
 
   /// 将对象装换为可序列化的对象
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> updateMap = <String, dynamic>{};
-
-    void addIfNonNull(String fieldName, dynamic value) {
-      if (value != null) {
-        updateMap[fieldName] = value;
-      }
-    }
-
-    addIfNonNull('polylinesToAdd', serializeOverlaySet(polylinesToAdd!));
-    addIfNonNull('polylinesToChange', serializeOverlaySet(polylinesToChange!));
-    addIfNonNull('polylineIdsToRemove', polylineIdsToRemove?.toList());
-
-    return updateMap;
+    return <String, dynamic>{
+      if (polylinesToAdd != null)
+        'polylinesToAdd': serializeOverlaySet(polylinesToAdd!),
+      if (polylinesToChange != null)
+        'polylinesToChange': serializeOverlaySet(polylinesToChange!),
+      if (polylineIdsToRemove != null)
+        'polylineIdsToRemove': polylineIdsToRemove!.toList(),
+    };
   }
 
   @override

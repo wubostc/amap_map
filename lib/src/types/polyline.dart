@@ -50,24 +50,6 @@ enum JoinType {
 
 /// 线相关的覆盖物类，内部的属性，描述了覆盖物的纹理、颜色、线宽等特征
 class Polyline extends BaseOverlay {
-  /// 默认构造函数
-  Polyline({
-    required this.points,
-    double width = 10,
-    this.visible = true,
-    this.geodesic = false,
-    double alpha = 1.0,
-    this.dashLineType = DashLineType.none,
-    this.capType = CapType.butt,
-    this.joinType = JoinType.bevel,
-    this.customTexture,
-    this.onTap,
-    this.color = const Color(0xCCC4E0F0),
-  })  : assert(points.isNotEmpty),
-        width = (width <= 0 ? 10 : width),
-        alpha = (alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha)),
-        super();
-
   /// 覆盖物的坐标点数组,points不能为空
   final List<LatLng> points;
 
@@ -101,32 +83,51 @@ class Polyline extends BaseOverlay {
   /// 点击回调（回调参数为id)
   final ArgumentCallback<String>? onTap;
 
+  /// 默认构造函数
+  Polyline({
+    required List<LatLng> points,
+    double width = 10,
+    this.visible = true,
+    this.geodesic = false,
+    double alpha = 1.0,
+    this.dashLineType = DashLineType.none,
+    this.capType = CapType.butt,
+    this.joinType = JoinType.bevel,
+    this.customTexture,
+    this.onTap,
+    this.color = const Color(0xCCC4E0F0),
+  })  : assert(points.isNotEmpty),
+        points = List<LatLng>.of(points),
+        width = (width <= 0 ? 10 : width),
+        alpha = (alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha)),
+        super();
+
   /// 实际copy函数
   Polyline copyWith({
-    List<LatLng>? pointsParam,
-    double? widthParam,
-    int? zIndexParam,
-    bool? visibleParam,
-    double? alphaParam,
-    DashLineType? dashLineTypeParam,
-    CapType? capTypeParam,
-    JoinType? joinTypeParam,
-    BitmapDescriptor? customTextureParam,
-    ArgumentCallback<String>? onTapParam,
-    Color? colorParam,
+    List<LatLng>? points,
+    double? width,
+    int? zIndex,
+    bool? visible,
+    double? alpha,
+    DashLineType? dashLineType,
+    CapType? capType,
+    JoinType? joinType,
+    BitmapDescriptor? customTexture,
+    ArgumentCallback<String>? onTap,
+    Color? color,
   }) {
     Polyline copyPolyline = Polyline(
-      points: pointsParam ?? points,
-      width: widthParam ?? width,
-      visible: visibleParam ?? visible,
+      points: List<LatLng>.of(points ?? this.points),
+      width: width ?? this.width,
+      visible: visible ?? this.visible,
       geodesic: geodesic,
-      alpha: alphaParam ?? alpha,
-      dashLineType: dashLineTypeParam ?? dashLineType,
-      capType: capTypeParam ?? capType,
-      joinType: joinTypeParam ?? joinType,
-      customTexture: customTextureParam ?? customTexture,
-      onTap: onTapParam ?? onTap,
-      color: colorParam ?? color,
+      alpha: alpha ?? this.alpha,
+      dashLineType: dashLineType ?? this.dashLineType,
+      capType: capType ?? this.capType,
+      joinType: joinType ?? this.joinType,
+      customTexture: customTexture ?? this.customTexture,
+      onTap: onTap ?? this.onTap,
+      color: color ?? this.color,
     );
     copyPolyline.setIdForCopy(id);
     return copyPolyline;
@@ -138,26 +139,19 @@ class Polyline extends BaseOverlay {
   /// 将对象转换为可序列化的map.
   @override
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> json = <String, dynamic>{};
-
-    void addIfPresent(String fieldName, dynamic value) {
-      if (value != null) {
-        json[fieldName] = value;
-      }
-    }
-
-    addIfPresent('id', id);
-    json['points'] = _pointsToJson();
-    addIfPresent('width', width);
-    addIfPresent('visible', visible);
-    addIfPresent('geodesic', geodesic);
-    addIfPresent('alpha', alpha);
-    addIfPresent('dashLineType', dashLineType.index);
-    addIfPresent('capType', capType.index);
-    addIfPresent('joinType', joinType.index);
-    addIfPresent('customTexture', customTexture?.toMap());
-    addIfPresent('color', color.argbValue);
-    return json;
+    return <String, dynamic>{
+      'id': id,
+      'points': _pointsToJson(),
+      'width': width,
+      'visible': visible,
+      'geodesic': geodesic,
+      'alpha': alpha,
+      'dashLineType': dashLineType.index,
+      'capType': capType.index,
+      'joinType': joinType.index,
+      if (customTexture != null) 'customTexture': customTexture?.toMap(),
+      'color': color.argbValue,
+    };
   }
 
   @override

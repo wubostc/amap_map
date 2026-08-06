@@ -112,6 +112,9 @@ class AMapWidget extends StatefulWidget {
   /// Marker InfoWindow 适配器
   final InfoWindowAdapter? infoWindowAdapter;
 
+  ///默认响应式，markers/polylines/polygons
+  final bool reactive;
+
   /// 创建一个展示高德地图的widget
   ///
   /// 在app首次启动时必须传入高德合规声明配置[privacyStatement],后续如果没有变化不需要重复设置
@@ -123,55 +126,57 @@ class AMapWidget extends StatefulWidget {
   /// 高德SDK合规使用方案请参考：https://lbs.amap.com/news/sdkhgsy
   ///
   /// [AssertionError] will be thrown if [initialCameraPosition] is null;
-  const AMapWidget(
-      {super.key,
-      this.initialCameraPosition =
-          const CameraPosition(target: LatLng(39.909187, 116.397451), zoom: 10),
-      this.mapType = MapType.normal,
-      this.buildingsEnabled = true,
-      this.compassEnabled = false,
-      this.labelsEnabled = true,
-      this.limitBounds,
-      this.minMaxZoomPreference,
-      this.rotateGesturesEnabled = true,
-      this.scaleEnabled = true,
-      this.scrollGesturesEnabled = true,
-      this.tiltGesturesEnabled = true,
-      this.touchPoiEnabled = true,
-      this.trafficEnabled = false,
-      this.zoomGesturesEnabled = true,
-      this.onMapCreated,
-      this.gestureRecognizers = const <Factory<OneSequenceGestureRecognizer>>{},
-      this.customStyleOptions,
-      this.myLocationStyleOptions,
-      this.onCameraMove,
-      this.onCameraMoveEnd,
-      this.onLocationChanged,
-      this.onTap,
-      this.onLongPress,
-      this.onPoiTouched,
-      this.markers = const <Marker>{},
-      this.polylines = const <Polyline>{},
-      this.polygons = const <Polygon>{},
-      this.mapLanguage,
-      this.infoWindowAdapter,
-      this.logoPosition,
-      this.logoBottomMargin,
-      this.logoLeftMargin});
+  const AMapWidget({
+    super.key,
+    this.initialCameraPosition =
+        const CameraPosition(target: LatLng(39.909187, 116.397451), zoom: 10),
+    this.mapType = MapType.normal,
+    this.buildingsEnabled = true,
+    this.compassEnabled = false,
+    this.labelsEnabled = true,
+    this.limitBounds,
+    this.minMaxZoomPreference,
+    this.rotateGesturesEnabled = true,
+    this.scaleEnabled = true,
+    this.scrollGesturesEnabled = true,
+    this.tiltGesturesEnabled = true,
+    this.touchPoiEnabled = true,
+    this.trafficEnabled = false,
+    this.zoomGesturesEnabled = true,
+    this.onMapCreated,
+    this.gestureRecognizers = const <Factory<OneSequenceGestureRecognizer>>{},
+    this.customStyleOptions,
+    this.myLocationStyleOptions,
+    this.onCameraMove,
+    this.onCameraMoveEnd,
+    this.onLocationChanged,
+    this.onTap,
+    this.onLongPress,
+    this.onPoiTouched,
+    this.markers = const <Marker>{},
+    this.polylines = const <Polyline>{},
+    this.polygons = const <Polygon>{},
+    this.mapLanguage,
+    this.infoWindowAdapter,
+    this.logoPosition,
+    this.logoBottomMargin,
+    this.logoLeftMargin,
+    this.reactive = true,
+  });
 
   ///
   @override
-  State<StatefulWidget> createState() => _MapState();
+  State<StatefulWidget> createState() => MapState();
 }
 
-class _MapState extends State<AMapWidget> {
+class MapState extends State<AMapWidget> {
   Map<String, Marker> _markers = <String, Marker>{};
   Map<String, Polyline> _polylines = <String, Polyline>{};
   Map<String, Polygon> _polygons = <String, Polygon>{};
   final Map<String, Widget?> _infoWindows = <String, Widget?>{};
 
   final Completer<AMapController> _controller = Completer<AMapController>();
-  late _AMapOptions _mapOptions;
+  late AMapOptions _mapOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +203,7 @@ class _MapState extends State<AMapWidget> {
   @override
   void initState() {
     super.initState();
-    _mapOptions = _AMapOptions.fromWidget(widget);
+    _mapOptions = AMapOptions.fromWidget(widget);
     _markers = keyByMarkerId(widget.markers);
     _polygons = keyByPolygonId(widget.polygons);
     _polylines = keyByPolylineId(widget.polylines);
@@ -210,7 +215,7 @@ class _MapState extends State<AMapWidget> {
   void dispose() async {
     super.dispose();
     AMapController controller = await _controller.future;
-    controller.disponse();
+    controller.dispose();
     print('dispose AMapWidget with mapId: ${controller.mapId}');
   }
 
@@ -230,6 +235,9 @@ class _MapState extends State<AMapWidget> {
   void didUpdateWidget(covariant AMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     _updateOptions();
+    if (!widget.reactive) {
+      return;
+    }
     updateMarkers();
     _updatePolylines();
     _updatePolygons();
@@ -280,7 +288,7 @@ class _MapState extends State<AMapWidget> {
   }
 
   void _updateOptions() async {
-    final _AMapOptions newOptions = _AMapOptions.fromWidget(widget);
+    final AMapOptions newOptions = AMapOptions.fromWidget(widget);
     final Map<String, dynamic> updates = _mapOptions._updatesMap(newOptions);
     if (updates.isEmpty) {
       return;
@@ -339,10 +347,40 @@ class _MapState extends State<AMapWidget> {
       _infoWindows.remove(markerId);
     });
   }
+
+  Marker? upsertMarker(Marker marker) {
+    Marker? prevMarker = _markers[marker.id];
+    _markers[marker.id] = marker;
+    return prevMarker;
+  }
+
+  Marker? removeMarker(String markerId) {
+    return _markers.remove(markerId);
+  }
+
+  Polyline? upsertPolyline(Polyline polyline) {
+    Polyline? prevPolyline = _polylines[polyline.id];
+    _polylines[polyline.id] = polyline;
+    return prevPolyline;
+  }
+
+  Polyline? removePolyline(String polylineId) {
+    return _polylines.remove(polylineId);
+  }
+
+  Polygon? upsertPolygon(Polygon polygon) {
+    Polygon? prevPolygon = _polygons[polygon.id];
+    _polygons[polygon.id] = polygon;
+    return prevPolygon;
+  }
+
+  Polygon? removePolygon(String polygonId) {
+    return _polygons.remove(polygonId);
+  }
 }
 
 //高德地图参数设置
-class _AMapOptions {
+class AMapOptions {
   ///地图类型
   final MapType mapType;
 
@@ -396,7 +434,7 @@ class _AMapOptions {
 
   final MapLanguage? mapLanguage;
 
-  _AMapOptions(
+  AMapOptions(
       {this.mapType = MapType.normal,
       this.buildingsEnabled,
       this.customStyleOptions,
@@ -417,8 +455,8 @@ class _AMapOptions {
       this.logoLeftMargin,
       this.mapLanguage});
 
-  static _AMapOptions fromWidget(AMapWidget map) {
-    return _AMapOptions(
+  static AMapOptions fromWidget(AMapWidget map) {
+    return AMapOptions(
       mapType: map.mapType,
       buildingsEnabled: map.buildingsEnabled,
       compassEnabled: map.compassEnabled,
@@ -441,37 +479,36 @@ class _AMapOptions {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    final Map<String, dynamic> optionsMap = <String, dynamic>{};
-    void addIfNonNull(String fieldName, dynamic value) {
-      if (value != null) {
-        optionsMap[fieldName] = value;
-      }
-    }
+  Map<String, dynamic> toMap() => <String, dynamic>{
+        'mapType': mapType.index,
+        if (buildingsEnabled != null) 'buildingsEnabled': buildingsEnabled,
+        if (customStyleOptions != null)
+          'customStyleOptions': customStyleOptions!.clone().toMap(),
+        if (compassEnabled != null) 'compassEnabled': compassEnabled,
+        if (labelsEnabled != null) 'labelsEnabled': labelsEnabled,
+        if (limitBounds != null) 'limitBounds': limitBounds!.toJson(),
+        if (minMaxZoomPreference != null)
+          'minMaxZoomPreference': minMaxZoomPreference!.toJson(),
+        if (scaleEnabled != null) 'scaleEnabled': scaleEnabled,
+        if (touchPoiEnabled != null) 'touchPoiEnabled': touchPoiEnabled,
+        if (trafficEnabled != null) 'trafficEnabled': trafficEnabled,
+        if (rotateGesturesEnabled != null)
+          'rotateGesturesEnabled': rotateGesturesEnabled,
+        if (scrollGesturesEnabled != null)
+          'scrollGesturesEnabled': scrollGesturesEnabled,
+        if (tiltGesturesEnabled != null)
+          'tiltGesturesEnabled': tiltGesturesEnabled,
+        if (zoomGesturesEnabled != null)
+          'zoomGesturesEnabled': zoomGesturesEnabled,
+        if (myLocationStyleOptions != null)
+          'myLocationStyle': myLocationStyleOptions!.clone().toMap(),
+        if (logoPosition != null) 'logoPosition': logoPosition,
+        if (logoBottomMargin != null) 'logoBottomMargin': logoBottomMargin,
+        if (logoLeftMargin != null) 'logoLeftMargin': logoLeftMargin,
+        if (mapLanguage != null) 'mapLanguage': mapLanguage!.value,
+      };
 
-    addIfNonNull('mapType', mapType.index);
-    addIfNonNull('buildingsEnabled', buildingsEnabled);
-    addIfNonNull('customStyleOptions', customStyleOptions?.clone().toMap());
-    addIfNonNull('compassEnabled', compassEnabled);
-    addIfNonNull('labelsEnabled', labelsEnabled);
-    addIfNonNull('limitBounds', limitBounds?.toJson());
-    addIfNonNull('minMaxZoomPreference', minMaxZoomPreference?.toJson());
-    addIfNonNull('scaleEnabled', scaleEnabled);
-    addIfNonNull('touchPoiEnabled', touchPoiEnabled);
-    addIfNonNull('trafficEnabled', trafficEnabled);
-    addIfNonNull('rotateGesturesEnabled', rotateGesturesEnabled);
-    addIfNonNull('scrollGesturesEnabled', scrollGesturesEnabled);
-    addIfNonNull('tiltGesturesEnabled', tiltGesturesEnabled);
-    addIfNonNull('zoomGesturesEnabled', zoomGesturesEnabled);
-    addIfNonNull('myLocationStyle', myLocationStyleOptions?.clone().toMap());
-    addIfNonNull('logoPosition', logoPosition);
-    addIfNonNull('logoBottomMargin', logoBottomMargin);
-    addIfNonNull('logoLeftMargin', logoLeftMargin);
-    addIfNonNull('mapLanguage', mapLanguage?.value);
-    return optionsMap;
-  }
-
-  Map<String, dynamic> _updatesMap(_AMapOptions newOptions) {
+  Map<String, dynamic> _updatesMap(AMapOptions newOptions) {
     final Map<String, dynamic> prevOptionsMap = toMap();
 
     return newOptions.toMap()

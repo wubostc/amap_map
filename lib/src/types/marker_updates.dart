@@ -4,6 +4,15 @@ import 'types.dart';
 
 /// 用以描述Marker的更新项
 class MarkerUpdates {
+  /// 想要添加的marker集合.
+  Set<Marker>? markersToAdd;
+
+  /// 想要删除的marker的id集合
+  Set<String>? markerIdsToRemove;
+
+  /// 想要更新的marker集合.
+  Set<Marker>? markersToChange;
+
   /// 根据之前的marker列表[previous]和当前的marker列表[current]创建[MakerUpdates].
   MarkerUpdates.from(Set<Marker> previous, Set<Marker> current) {
     final Map<String, Marker> previousMarkers = keyByMarkerId(previous);
@@ -40,29 +49,21 @@ class MarkerUpdates {
     markersToChange = tempMarkersToChange;
   }
 
-  /// 想要添加的marker集合.
-  Set<Marker>? markersToAdd;
+  MarkerUpdates.add(Set<Marker> markers) : markersToAdd = markers;
 
-  /// 想要删除的marker的id集合
-  Set<String>? markerIdsToRemove;
+  MarkerUpdates.remove(Set<String> markerIds) : markerIdsToRemove = markerIds;
 
-  /// 想要更新的marker集合.
-  Set<Marker>? markersToChange;
+  MarkerUpdates.change(Set<Marker> markers) : markersToChange = markers;
 
   Map<String, dynamic> toMap() {
-    final Map<String, dynamic> updateMap = <String, dynamic>{};
-
-    void addIfNonNull(String fieldName, dynamic value) {
-      if (value != null) {
-        updateMap[fieldName] = value;
-      }
-    }
-
-    addIfNonNull('markersToAdd', serializeOverlaySet(markersToAdd!));
-    addIfNonNull('markersToChange', serializeOverlaySet(markersToChange!));
-    addIfNonNull('markerIdsToRemove', markerIdsToRemove?.toList());
-
-    return updateMap;
+    return <String, dynamic>{
+      if (markersToAdd != null)
+        'markersToAdd': serializeOverlaySet(markersToAdd!),
+      if (markersToChange != null)
+        'markersToChange': serializeOverlaySet(markersToChange!),
+      if (markerIdsToRemove != null)
+        'markerIdsToRemove': markerIdsToRemove!.toList(),
+    };
   }
 
   @override
