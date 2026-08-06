@@ -62,9 +62,9 @@ class AMapController {
     _methodChannel.onCameraMoveEnd(mapId: mapId).listen((CameraMoveEndEvent e) {
       _mapState.widget.onCameraMoveEnd?.call(e.value);
     });
-    _methodChannel
-        .onMapTap(mapId: mapId)
-        .listen(((MapTapEvent e) => _mapState.widget.onTap?.call(e.value)));
+    _methodChannel.onMapTap(mapId: mapId).listen((MapTapEvent e) {
+      _mapState.onMapTap(e.value);
+    });
     _methodChannel.onMapLongPress(mapId: mapId).listen(((MapLongPressEvent e) {
       _mapState.widget.onLongPress?.call(e.value);
     }));

@@ -287,6 +287,45 @@ class MapState extends State<AMapWidget> {
     }
   }
 
+  void onMapTap(LatLng position) {
+    _onPolygonTap(position);
+    widget.onTap?.call(position);
+  }
+
+  void _onPolygonTap(LatLng position) {
+    final List<Polygon> polygons = _polygons.values.toList(growable: false);
+    for (final Polygon polygon in polygons.reversed) {
+      final ArgumentCallback<String>? onTap = polygon.onTap;
+      if (!polygon.visible || onTap == null) {
+        continue;
+      }
+      if (_containsLatLng(polygon.points, position)) {
+        onTap(polygon.id);
+        return;
+      }
+    }
+  }
+
+  static bool _containsLatLng(List<LatLng> points, LatLng position) {
+    if (points.length < 3) {
+      return false;
+    }
+
+    final List<turf.Position> ring = points
+        .map((LatLng point) => turf.Position(point.longitude, point.latitude))
+        .toList();
+    final turf.Position first = ring.first;
+    final turf.Position last = ring.last;
+    if (first.lng != last.lng || first.lat != last.lat) {
+      ring.add(first);
+    }
+
+    return turf.booleanPointInPolygon(
+      turf.Position(position.longitude, position.latitude),
+      turf.Polygon(coordinates: <List<turf.Position>>[ring]),
+    );
+  }
+
   void _updateOptions() async {
     final AMapOptions newOptions = AMapOptions.fromWidget(widget);
     final Map<String, dynamic> updates = _mapOptions._updatesMap(newOptions);
