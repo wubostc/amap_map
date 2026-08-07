@@ -171,6 +171,7 @@ AMapWidget(
 ```dart
 final Marker marker = Marker(
   position: const LatLng(39.909187, 116.397451),
+  infoWindowEnable: true,
   infoWindow: const InfoWindow(
     title: '天安门',
     snippet: '北京市东城区',
@@ -196,7 +197,7 @@ Marker 支持：
 - `clickable`
 - `draggable`
 - `infoWindow`
-- `infoWindowEnable`
+- `infoWindowEnable`，默认为 `false`
 - `rotation`
 - `visible`
 - `zIndex`

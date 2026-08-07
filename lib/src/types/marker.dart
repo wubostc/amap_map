@@ -92,7 +92,8 @@ class Marker extends BaseOverlay {
   /// 覆盖物的图标
   final BitmapDescriptor icon;
 
-  /// 是否显示气泡，如果为true,则点击[Marker]后，会显示该气泡[InfoWindow]
+  /// 是否显示气泡，默认为false。
+  /// 如果为true,则点击[Marker]后，会显示该气泡[InfoWindow]
   /// 如果为false,则始终不会显示该气泡
   final bool infoWindowEnable;
 
@@ -127,7 +128,7 @@ class Marker extends BaseOverlay {
     this.clickable = true,
     this.draggable = false,
     this.icon = BitmapDescriptor.defaultMarker,
-    this.infoWindowEnable = true,
+    this.infoWindowEnable = false,
     this.infoWindow = InfoWindow.noText,
     this.rotation = 0.0,
     this.visible = true,
