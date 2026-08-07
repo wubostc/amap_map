@@ -5,16 +5,6 @@
 
 import 'package:x_amap_base/x_amap_base.dart' show LatLng;
 
-String _objectsToAddKey(String name) => '${name}sToAdd';
-String _objectsToChangeKey(String name) => '${name}sToChange';
-String _objectIdsToRemoveKey(String name) => '${name}IdsToRemove';
-
-void _addIfNonNull(Map<String, Object?> map, String fieldName, Object? value) {
-  if (value != null) {
-    map[fieldName] = value;
-  }
-}
-
 /// Serialize [LatLng]
 Object serializeLatLng(LatLng latLng) {
   return <Object>[latLng.latitude, latLng.longitude];

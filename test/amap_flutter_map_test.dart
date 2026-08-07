@@ -1,4 +1,5 @@
 import 'package:amap_map/amap_map.dart';
+import 'package:amap_map/src/utils/polygon_hit_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:x_amap_base/x_amap_base.dart';
@@ -70,6 +71,91 @@ void main() {
     polyline.points.add(const LatLng(42.0, 119.0));
 
     expect(clone.points, hasLength(2));
+  });
+
+  test('Polygon hit test uses turf for inside, boundary, and outside points',
+      () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(0, 0),
+      const LatLng(0, 10),
+      const LatLng(10, 10),
+      const LatLng(10, 0),
+    ];
+
+    expect(containsLatLngInPolygon(points, const LatLng(5, 5)), isTrue);
+    expect(containsLatLngInPolygon(points, const LatLng(0, 5)), isTrue);
+    expect(containsLatLngInPolygon(points, const LatLng(11, 5)), isFalse);
+  });
+
+  test('Polygon hit test selects the last tappable matching polygon', () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(0, 0),
+      const LatLng(0, 10),
+      const LatLng(10, 10),
+      const LatLng(10, 0),
+    ];
+    final List<String> tappedIds = <String>[];
+    final Polygon first = Polygon(points: points, onTap: tappedIds.add);
+    final Polygon second = Polygon(points: points, onTap: tappedIds.add);
+
+    final Polygon? target = hitTestPolygonTapTarget(
+      <Polygon>[first, second],
+      const LatLng(5, 5),
+    );
+    target?.onTap?.call(target.id);
+
+    expect(target, same(second));
+    expect(tappedIds, <String>[second.id]);
+  });
+
+  test('Polygon hit test skips invisible polygons and polygons without onTap',
+      () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(0, 0),
+      const LatLng(0, 10),
+      const LatLng(10, 10),
+      const LatLng(10, 0),
+    ];
+    final List<String> tappedIds = <String>[];
+    final Polygon active = Polygon(points: points, onTap: tappedIds.add);
+    final Polygon hidden = Polygon(
+      points: points,
+      visible: false,
+      onTap: tappedIds.add,
+    );
+    final Polygon noCallback = Polygon(points: points);
+
+    expect(
+      hitTestPolygonTapTarget(
+        <Polygon>[active, hidden, noCallback],
+        const LatLng(5, 5),
+      ),
+      same(active),
+    );
+    expect(
+      hitTestPolygonTapTarget(
+        <Polygon>[hidden, noCallback],
+        const LatLng(5, 5),
+      ),
+      isNull,
+    );
+  });
+
+  test('Polygon copyWith preserves onTap callback', () {
+    final List<LatLng> points = <LatLng>[
+      const LatLng(0, 0),
+      const LatLng(0, 10),
+      const LatLng(10, 10),
+      const LatLng(10, 0),
+    ];
+    final List<String> tappedIds = <String>[];
+    final Polygon polygon = Polygon(points: points, onTap: tappedIds.add);
+
+    final Polygon copy = polygon.copyWith(fillColor: Colors.red);
+    copy.onTap?.call(copy.id);
+
+    expect(copy.onTap, same(polygon.onTap));
+    expect(tappedIds, <String>[polygon.id]);
   });
 
   // setUp(() {
