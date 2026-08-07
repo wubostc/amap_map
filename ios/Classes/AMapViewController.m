@@ -1,6 +1,6 @@
 //
 //  AMapViewController.m
-//  amap_map
+//  amap_map2
 //
 //  Created by lly on 2020/10/29.
 //
@@ -56,7 +56,7 @@
         NSAssert([args isKindOfClass:[NSDictionary class]], @"传参错误");
         //构建methedChannel
         NSString* channelName =
-        [NSString stringWithFormat:@"amap_map_%lld", viewId];
+        [NSString stringWithFormat:@"amap_map2_%lld", viewId];
         _channel = [FlutterMethodChannel methodChannelWithName:channelName
                                                binaryMessenger:registrar.messenger];
         

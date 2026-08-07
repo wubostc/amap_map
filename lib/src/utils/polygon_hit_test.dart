@@ -1,4 +1,4 @@
-import 'package:amap_map/src/types/polygon.dart';
+import 'package:amap_map2/src/types/polygon.dart';
 import 'package:turf/turf.dart' as turf;
 import 'package:x_amap_base/x_amap_base.dart';
 

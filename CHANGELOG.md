@@ -1,3 +1,9 @@
+## 1.0.0
+2026-08-07
+* 发布 `amap_map2` 初始版本，基于 `amap_map` 重命名。
+* 同步 Android/iOS 插件标识、文档、示例和测试。
+* 新增 Flutter 层 `Polygon.onTap` 命中判断，使用 `turf.booleanPointInPolygon`。
+
 ## 1.0.15
 2025-03-21
 * add MapConfiguration and serialize utils

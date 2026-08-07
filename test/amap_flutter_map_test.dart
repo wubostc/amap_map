@@ -1,11 +1,11 @@
-import 'package:amap_map/amap_map.dart';
-import 'package:amap_map/src/utils/polygon_hit_test.dart';
+import 'package:amap_map2/amap_map2.dart';
+import 'package:amap_map2/src/utils/polygon_hit_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 
 void main() {
-  // const MethodChannel channel = MethodChannel('amap_map');
+  // const MethodChannel channel = MethodChannel('amap_map2');
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -384,7 +384,7 @@ void main() {
             MarkerRender.image(
               const MarkerRenderAssetSource(
                 'assets/marker_bg.png',
-                package: 'amap_map',
+                package: 'amap_map2',
               ),
               style: const MarkerRenderImageStyle(
                 width: 88,
@@ -465,7 +465,7 @@ void main() {
               'src': <dynamic>[
                 'fromAsset',
                 'assets/marker_bg.png',
-                'amap_map',
+                'amap_map2',
               ],
               'style': <String, dynamic>{
                 'width': 88.0,

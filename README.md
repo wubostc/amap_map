@@ -1,6 +1,6 @@
-# amap_map
+# amap_map2
 
-[![pub package](https://img.shields.io/pub/v/amap_map.svg)](https://pub.dev/packages/amap_map)
+[![pub package](https://img.shields.io/pub/v/amap_map2.svg)](https://pub.dev/packages/amap_map2)
 
 基于[高德开放平台地图 SDK](https://lbs.amap.com/api/)的 Flutter 地图插件，支持 Android 和 iOS。
 
@@ -24,13 +24,13 @@
 ## 安装
 
 ```bash
-flutter pub add amap_map
+flutter pub add amap_map2
 ```
 
 需要同时引入 `x_amap_base` 中的基础类型：
 
 ```dart
-import 'package:amap_map/amap_map.dart';
+import 'package:amap_map2/amap_map2.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 ```
 

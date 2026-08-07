@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:amap_map/src/compatibility/color_extensions.dart';
-import 'package:amap_map/src/types/bitmap.dart';
+import 'package:amap_map2/src/compatibility/color_extensions.dart';
+import 'package:amap_map2/src/types/bitmap.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' show Color;
 import 'package:x_amap_base/x_amap_base.dart';

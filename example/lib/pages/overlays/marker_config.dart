@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui';
 
-import 'package:amap_map_example/widgets/amap_switch_button.dart';
+import 'package:amap_map2_example/widgets/amap_switch_button.dart';
 import 'package:flutter/material.dart';
 
-import 'package:amap_map/amap_map.dart';
+import 'package:amap_map2/amap_map2.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 import 'dart:math';
 

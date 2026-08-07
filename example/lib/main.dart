@@ -1,9 +1,9 @@
-import 'package:amap_map/amap_map.dart';
-import 'package:amap_map_example/animated_category_item.dart';
-import 'package:amap_map_example/category_list_item.dart';
-import 'package:amap_map_example/const_config.dart';
-import 'package:amap_map_example/data/demos.dart';
-import 'package:amap_map_example/routes.dart';
+import 'package:amap_map2/amap_map2.dart';
+import 'package:amap_map2_example/animated_category_item.dart';
+import 'package:amap_map2_example/category_list_item.dart';
+import 'package:amap_map2_example/const_config.dart';
+import 'package:amap_map2_example/data/demos.dart';
+import 'package:amap_map2_example/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 

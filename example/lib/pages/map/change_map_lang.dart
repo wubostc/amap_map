@@ -9,8 +9,8 @@
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 
-import 'package:amap_map/amap_map.dart';
-import 'package:amap_map_example/widgets/amap_radio_group.dart';
+import 'package:amap_map2/amap_map2.dart';
+import 'package:amap_map2_example/widgets/amap_radio_group.dart';
 import 'package:flutter/material.dart';
 
 class ChangeMapLangPage extends StatefulWidget {
