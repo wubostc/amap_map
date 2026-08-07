@@ -3,7 +3,7 @@
 
 import 'dart:ui' show Color;
 
-import 'package:amap_map/src/compatibility/color_extensions.dart';
+import 'package:amap_map2/src/compatibility/color_extensions.dart';
 
 /// Builds a platform-neutral, declarative marker icon description.
 ///

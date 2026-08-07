@@ -1,4 +1,4 @@
-import 'package:amap_map_example/demo.dart';
+import 'package:amap_map2_example/demo.dart';
 import 'package:flutter/material.dart';
 
 typedef PathWidgetBuilder = Widget Function(BuildContext, String?);

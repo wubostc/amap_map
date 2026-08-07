@@ -1,4 +1,4 @@
-part of '../../amap_map.dart';
+part of '../../amap_map2.dart';
 
 bool isLocationValid(AMapLocation location) {
   final LatLng latLng = location.latLng;

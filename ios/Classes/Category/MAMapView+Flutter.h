@@ -1,6 +1,6 @@
 //
 //  MAMapView+Flutter.h
-//  amap_map
+//  amap_map2
 //
 //  Created by lly on 2020/10/30.
 //

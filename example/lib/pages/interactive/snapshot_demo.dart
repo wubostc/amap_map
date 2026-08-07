@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:amap_map/amap_map.dart';
+import 'package:amap_map2/amap_map2.dart';
 import 'package:flutter/material.dart';
 
 class SnapshotPage extends StatefulWidget {

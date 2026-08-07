@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.amap.flutter.amap_map_example">
+    package="com.amap.flutter.amap_map2_example">
     <!-- io.flutter.app.FlutterApplication is an android.app.Application that
          calls FlutterMain.startInitialization(this); in its onCreate method.
          In most cases you can leave this as-is, but you if you want to provide
@@ -22,7 +22,7 @@
         android:enableOnBackInvokedCallback="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:label="amap_map_example">
+        android:label="amap_map2_example">
         <!-- <meta-data
             android:name="com.amap.api.v2.apikey"
             android:value="900f72eeee0f21e435cebb0ef155582a" /> -->

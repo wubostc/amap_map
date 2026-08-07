@@ -1,4 +1,4 @@
-group 'com.amap.flutter.map'
+group 'com.amap.flutter.map2'
 version '1.0'
 
 buildscript {
@@ -22,7 +22,7 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
-    namespace = "com.amap.flutter.map"
+    namespace = "com.amap.flutter.map2"
     compileSdk 35
 
     defaultConfig {

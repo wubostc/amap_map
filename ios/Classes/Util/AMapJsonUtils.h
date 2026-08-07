@@ -1,6 +1,6 @@
 //
 //  MAJsonUtils.h
-//  amap_map
+//  amap_map2
 //
 //  Created by shaobin on 2019/2/13.
 //  Copyright © 2019 Amap.com. All rights reserved.

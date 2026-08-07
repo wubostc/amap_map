@@ -1,4 +1,4 @@
-import 'package:amap_map_example/main.dart';
+import 'package:amap_map2_example/main.dart';
 import 'package:flutter/material.dart';
 
 typedef CategoryHeaderTapCallback = Function(bool shouldOpenList);

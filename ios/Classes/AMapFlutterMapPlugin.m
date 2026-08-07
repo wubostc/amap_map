@@ -10,7 +10,7 @@
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     AMapFlutterFactory* aMapFactory = [[AMapFlutterFactory alloc] initWithRegistrar:registrar];
     [registrar registerViewFactory:aMapFactory
-                            withId:@"com.amap.flutter.map"
+                            withId:@"com.amap.flutter.map2"
   gestureRecognizersBlockingPolicy:
      FlutterPlatformViewGestureRecognizersBlockingPolicyWaitUntilTouchesEnded];
 }

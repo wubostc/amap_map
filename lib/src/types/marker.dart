@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:ui' show Offset;
-import 'package:amap_map/src/types/base_overlay.dart';
+import 'package:amap_map2/src/types/base_overlay.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 import 'bitmap.dart';
 

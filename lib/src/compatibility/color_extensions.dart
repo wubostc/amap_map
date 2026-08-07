@@ -13,7 +13,7 @@
 
 import 'dart:ui';
 
-import 'package:amap_map/src/compatibility/compatibility_utils.dart';
+import 'package:amap_map2/src/compatibility/compatibility_utils.dart';
 
 extension ColorCompatibilityExtension on Color {
   int get argbValue {

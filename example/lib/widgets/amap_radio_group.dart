@@ -1,4 +1,4 @@
-import 'package:amap_map_example/widgets/amap_gridview.dart';
+import 'package:amap_map2_example/widgets/amap_gridview.dart';
 import 'package:flutter/material.dart';
 
 class AMapRadioGroup<T> extends StatefulWidget {

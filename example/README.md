@@ -1,6 +1,6 @@
-# amap_map_example
+# amap_map2_example
 
-Demonstrates how to use the amap_map plugin.
+Demonstrates how to use the amap_map2 plugin.
 
 ## Getting Started
 

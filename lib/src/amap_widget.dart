@@ -10,7 +10,7 @@
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 
-part of '../amap_map.dart';
+part of '../amap_map2.dart';
 
 typedef MapCreatedCallback = void Function(AMapController controller);
 

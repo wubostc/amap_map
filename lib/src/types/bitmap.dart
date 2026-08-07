@@ -80,7 +80,7 @@ class BitmapDescriptor {
     }
     return BitmapDescriptor._(<dynamic>[
       'fromAssetImage',
-      "packages/amap_map/res/$filename",
+      "packages/amap_map2/res/$filename",
       AMapUtil.devicePixelRatio
     ]);
   }

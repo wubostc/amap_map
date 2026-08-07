@@ -1,13 +1,13 @@
 import 'dart:collection';
 
-import 'package:amap_map_example/main.dart';
-import 'package:amap_map_example/pages/interactive/map_ui_options.dart';
-import 'package:amap_map_example/pages/map/change_map_lang.dart';
-import 'package:amap_map_example/pages/map/limit_map_bounds.dart';
-import 'package:amap_map_example/pages/map/map_my_location.dart';
-import 'package:amap_map_example/pages/map/show_map_page.dart';
-import 'package:amap_map_example/pages/overlays/custom_info_window.dart';
-import 'package:amap_map_example/pages/overlays/marker_config.dart';
+import 'package:amap_map2_example/main.dart';
+import 'package:amap_map2_example/pages/interactive/map_ui_options.dart';
+import 'package:amap_map2_example/pages/map/change_map_lang.dart';
+import 'package:amap_map2_example/pages/map/limit_map_bounds.dart';
+import 'package:amap_map2_example/pages/map/map_my_location.dart';
+import 'package:amap_map2_example/pages/map/show_map_page.dart';
+import 'package:amap_map2_example/pages/overlays/custom_info_window.dart';
+import 'package:amap_map2_example/pages/overlays/marker_config.dart';
 import 'package:flutter/material.dart';
 
 class DemoConfiguration {

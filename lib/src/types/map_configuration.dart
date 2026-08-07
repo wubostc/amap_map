@@ -3,7 +3,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:amap_map/amap_map.dart'
+import 'package:amap_map2/amap_map2.dart'
     show CameraTargetBounds, MapType, MinMaxZoomPreference;
 import 'package:flutter/widgets.dart';
 

@@ -1,4 +1,4 @@
-import 'package:amap_map/amap_map.dart';
+import 'package:amap_map2/amap_map2.dart';
 import 'package:flutter/widgets.dart';
 
 abstract class InfoWindowAdapter {
