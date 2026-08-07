@@ -38,6 +38,7 @@ class _State extends State<CustomInfoWindowDemoPage> {
     final Marker marker = Marker(
       position: markPostion,
       icon: _markerIcon!,
+      infoWindowEnable: true,
       infoWindow: InfoWindow(title: '第 $markerCount 个Marker'),
       onTap: (String markerId) => _onMarkerTapped(markerId),
       onDragEnd: (String markerId, LatLng endPosition) =>

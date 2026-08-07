@@ -39,6 +39,25 @@ void main() {
     });
   });
 
+  test('Marker infoWindowEnable defaults to false', () {
+    final Marker marker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      infoWindow: const InfoWindow(title: '天安门'),
+    );
+
+    expect(marker.infoWindowEnable, isFalse);
+    expect(marker.toMap()['infoWindowEnable'], isFalse);
+
+    final Marker enabledMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      infoWindowEnable: true,
+      infoWindow: const InfoWindow(title: '天安门'),
+    );
+
+    expect(enabledMarker.infoWindowEnable, isTrue);
+    expect(enabledMarker.toMap()['infoWindowEnable'], isTrue);
+  });
+
   test('Polygon defensively copies points', () {
     final List<LatLng> points = <LatLng>[
       const LatLng(39.0, 116.0),
