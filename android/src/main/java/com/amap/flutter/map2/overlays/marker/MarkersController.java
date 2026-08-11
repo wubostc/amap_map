@@ -196,18 +196,10 @@ public class MarkersController
         return true;
     }
 
-    @Override
-    public void onMarkerDragStart(Marker marker) {
-
-    }
-
-    @Override
-    public void onMarkerDrag(Marker marker) {
-
-    }
-
-    @Override
-    public void onMarkerDragEnd(Marker marker) {
+    /**
+     * 将高德地图 Marker 拖拽事件转换为 Dart Marker ID 和坐标后发送到 Flutter。
+     */
+    private void invokeMarkerDragEvent(String methodName, Marker marker) {
         String markerId = marker.getId();
         String dartId = idMapByOverlyId.get(markerId);
         LatLng latLng = marker.getPosition();
@@ -217,9 +209,24 @@ public class MarkersController
         final Map<String, Object> data = new HashMap<>(2);
         data.put("markerId", dartId);
         data.put("position", ConvertUtil.latLngToList(latLng));
-        methodChannel.invokeMethod("marker#onDragEnd", data);
+        methodChannel.invokeMethod(methodName, data);
 
-        LogUtil.i(CLASS_NAME, "onMarkerDragEnd==>" + data);
+        LogUtil.i(CLASS_NAME, methodName + "==>" + data);
+    }
+
+    @Override
+    public void onMarkerDragStart(Marker marker) {
+        invokeMarkerDragEvent("marker#onDragStart", marker);
+    }
+
+    @Override
+    public void onMarkerDrag(Marker marker) {
+        invokeMarkerDragEvent("marker#onDrag", marker);
+    }
+
+    @Override
+    public void onMarkerDragEnd(Marker marker) {
+        invokeMarkerDragEvent("marker#onDragEnd", marker);
     }
 
     @Override

@@ -172,6 +172,16 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
     return _events(mapId).whereType<MarkerTapEvent>();
   }
 
+  /// Camera 地图锚点拖拽开始回调
+  Stream<MarkerDragStartEvent> onMarkerDragStart({required int mapId}) {
+    return _events(mapId).whereType<MarkerDragStartEvent>();
+  }
+
+  /// Camera 地图锚点拖拽中回调
+  Stream<MarkerDragEvent> onMarkerDrag({required int mapId}) {
+    return _events(mapId).whereType<MarkerDragEvent>();
+  }
+
   /// Camera 地图锚点拖拽结束回调
   Stream<MarkerDragEndEvent> onMarkerDragEnd({required int mapId}) {
     return _events(mapId).whereType<MarkerDragEndEvent>();
@@ -179,6 +189,25 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
 
   Stream<PolylineTapEvent> onPolylineTap({required int mapId}) {
     return _events(mapId).whereType<PolylineTapEvent>();
+  }
+
+  /// 解析原生 Marker 坐标事件并加入当前地图的事件流。
+  void _addMarkerPositionEvent(
+    int mapId,
+    MethodCall call,
+    MapEvent<String> Function(int mapId, LatLng position, String markerId)
+        createEvent,
+  ) {
+    try {
+      final LatLng? position = LatLng.fromJson(call.arguments['position']);
+      final Object? markerId = call.arguments['markerId'];
+      if (position == null || markerId is! String) {
+        return;
+      }
+      _mapEventStreamController.add(createEvent(mapId, position, markerId));
+    } catch (e) {
+      print('${call.method} error===>$e');
+    }
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call, int mapId) async {
@@ -223,11 +252,14 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
           call.arguments['markerId'],
         ));
         break;
+      case 'marker#onDragStart':
+        _addMarkerPositionEvent(mapId, call, MarkerDragStartEvent.new);
+        break;
+      case 'marker#onDrag':
+        _addMarkerPositionEvent(mapId, call, MarkerDragEvent.new);
+        break;
       case 'marker#onDragEnd':
-        _mapEventStreamController.add(MarkerDragEndEvent(
-            mapId,
-            LatLng.fromJson(call.arguments['position'])!,
-            call.arguments['markerId']));
+        _addMarkerPositionEvent(mapId, call, MarkerDragEndEvent.new);
         break;
       case 'polyline#onTap':
         _mapEventStreamController

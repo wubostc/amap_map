@@ -58,6 +58,16 @@ class MarkerTapEvent extends MapEvent<String> {
   MarkerTapEvent(super.mapId, super.markerId);
 }
 
+/// [Marker] 的拖拽开始事件，附带拖拽开始时的位置信息[LatLng].
+class MarkerDragStartEvent extends _PositionedMapEvent<String> {
+  MarkerDragStartEvent(super.mapId, super.position, super.markerId);
+}
+
+/// [Marker] 的拖拽中事件，附带当前拖拽位置[LatLng].
+class MarkerDragEvent extends _PositionedMapEvent<String> {
+  MarkerDragEvent(super.mapId, super.position, super.markerId);
+}
+
 /// [Marker] 的拖拽结束事件，附带拖拽结束时的位置信息[LatLng].
 class MarkerDragEndEvent extends _PositionedMapEvent<String> {
   MarkerDragEndEvent(super.mapId, super.position, super.markerId);

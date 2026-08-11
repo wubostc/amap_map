@@ -83,6 +83,10 @@ class _State extends State<MarkerConfigDemoPage> {
       infoWindowEnable: true,
       infoWindow: InfoWindow(title: '第 $markerCount 个Marker'),
       onTap: (String markerId) => _onMarkerTapped(markerId),
+      onDragStart: (String markerId, LatLng startPosition) =>
+          _onMarkerDragStart(markerId, startPosition),
+      onDrag: (String markerId, LatLng position) =>
+          _onMarkerDrag(markerId, position),
       onDragEnd: (String markerId, LatLng endPosition) =>
           _onMarkerDragEnd(markerId, endPosition),
     );
@@ -99,6 +103,18 @@ class _State extends State<MarkerConfigDemoPage> {
     setState(() {
       selectedMarkerId = markerId;
     });
+  }
+
+  void _onMarkerDragStart(String markerId, LatLng position) {
+    final Marker? tappedMarker = _markers[markerId];
+    final String? title = tappedMarker!.infoWindow.title;
+    print('$title markerId: $markerId 开始拖拽: $position');
+  }
+
+  void _onMarkerDrag(String markerId, LatLng position) {
+    final Marker? tappedMarker = _markers[markerId];
+    final String? title = tappedMarker!.infoWindow.title;
+    print('$title markerId: $markerId 正在拖拽: $position');
   }
 
   void _onMarkerDragEnd(String markerId, LatLng position) {

@@ -77,6 +77,16 @@ class AMapController {
       _mapState.onMarkerTap(e.value);
     });
 
+    _methodChannel
+        .onMarkerDragStart(mapId: mapId)
+        .listen((MarkerDragStartEvent e) {
+      _mapState.onMarkerDragStart(e.value, e.position);
+    });
+
+    _methodChannel.onMarkerDrag(mapId: mapId).listen((MarkerDragEvent e) {
+      _mapState.onMarkerDrag(e.value, e.position);
+    });
+
     _methodChannel.onMarkerDragEnd(mapId: mapId).listen((MarkerDragEndEvent e) {
       _mapState.onMarkerDragEnd(e.value, e.position);
     });

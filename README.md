@@ -171,6 +171,8 @@ AMapWidget(
 ```dart
 final Marker marker = Marker(
   position: const LatLng(39.909187, 116.397451),
+  draggable: true,
+  draggingEventFrequency: 20,
   infoWindowEnable: true,
   infoWindow: const InfoWindow(
     title: '天安门',
@@ -178,6 +180,15 @@ final Marker marker = Marker(
   ),
   onTap: (String markerId) {
     debugPrint('marker tapped: $markerId');
+  },
+  onDragStart: (String markerId, LatLng position) {
+    debugPrint('marker drag start: $markerId, $position');
+  },
+  onDrag: (String markerId, LatLng position) {
+    debugPrint('marker dragging: $markerId, $position');
+  },
+  onDragEnd: (String markerId, LatLng position) {
+    debugPrint('marker drag end: $markerId, $position');
   },
 );
 ```
@@ -196,12 +207,15 @@ Marker 支持：
 - `anchor`
 - `clickable`
 - `draggable`
+- `draggingEventFrequency`，iOS 拖拽中事件采样频率，默认 `30 FPS`，取值范围 `1～120`
 - `infoWindow`
 - `infoWindowEnable`，默认为 `false`
 - `rotation`
 - `visible`
 - `zIndex`
 - `onTap`
+- `onDragStart`
+- `onDrag`
 - `onDragEnd`
 
 ### 声明式 JSON Marker 图标
