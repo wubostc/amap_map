@@ -1,3 +1,9 @@
+## 1.0.1
+2026-08-11
+* 完善 Android/iOS Marker 拖拽开始、拖拽中和拖拽结束事件。
+* iOS 拖拽中根据 Marker 视图位置持续采样，支持通过 `draggingEventFrequency` 配置采样频率。
+* 修正 `Marker.infoWindowEnable` 的默认值，并补充 Marker 拖拽相关测试。
+
 ## 1.0.0
 2026-08-07
 * 发布 `amap_map2` 初始版本，基于 `amap_map` 重命名。
