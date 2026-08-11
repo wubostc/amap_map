@@ -21,6 +21,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable AMapMarker *)markerForId:(NSString *)markerId;
 
+/// 获取 Marker 拖拽中事件的采样频率。
+/// @param markerId Marker 在 Dart 侧的唯一标识
+/// @return 每秒采样次数，未配置时返回 30
+- (NSInteger)draggingEventFrequencyForMarkerId:(NSString *)markerId;
+
 - (void)addMarkers:(NSArray*)markersToAdd;
 
 - (void)changeMarkers:(NSArray*)markersToChange;
@@ -31,7 +36,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)onMarkerTap:(NSString*)markerId;
 
-- (BOOL)onMarker:(NSString *)markerId endPostion:(CLLocationCoordinate2D)position;
+/// 向 Dart 发送 Marker 开始拖拽事件。
+- (BOOL)onMarker:(NSString *)markerId dragStartPosition:(CLLocationCoordinate2D)position;
+
+/// 向 Dart 发送 Marker 拖拽中事件。
+- (BOOL)onMarker:(NSString *)markerId draggingPosition:(CLLocationCoordinate2D)position;
+
+/// 向 Dart 发送 Marker 拖拽结束事件。
+- (BOOL)onMarker:(NSString *)markerId dragEndPosition:(CLLocationCoordinate2D)position;
 
 //- (BOOL)onInfoWindowTap:(NSString *)markerId;
 

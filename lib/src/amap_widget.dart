@@ -267,6 +267,29 @@ class MapState extends State<AMapWidget> {
     }
   }
 
+  /// 分发 Marker 开始拖拽事件。
+  void onMarkerDragStart(String markerId, LatLng position) {
+    final Marker? marker = _markers[markerId];
+    if (marker != null) {
+      final MarkerDragStartCallback? onDragStart = marker.onDragStart;
+      if (onDragStart != null) {
+        onDragStart(markerId, position);
+      }
+    }
+  }
+
+  /// 分发 Marker 拖拽中事件。
+  void onMarkerDrag(String markerId, LatLng position) {
+    final Marker? marker = _markers[markerId];
+    if (marker != null) {
+      final MarkerDragCallback? onDrag = marker.onDrag;
+      if (onDrag != null) {
+        onDrag(markerId, position);
+      }
+    }
+  }
+
+  /// 分发 Marker 拖拽结束事件。
   void onMarkerDragEnd(String markerId, LatLng position) {
     final Marker? marker = _markers[markerId];
     if (marker != null) {

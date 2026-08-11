@@ -26,8 +26,37 @@
 #import "AMapJsonUtils.h"
 #import "AMapConvertUtil.h"
 #import "FlutterMethodChannel+MethodCallDispatch.h"
+#import <QuartzCore/QuartzCore.h>
 
-@interface AMapViewController ()<MAMapViewDelegate>
+@protocol AMapMarkerDragDisplayLinkTargetDelegate <NSObject>
+
+/// 接收 CADisplayLink 帧回调并执行 Marker 拖拽位置采样。
+- (void)markerDragDisplayLinkDidFire:(CADisplayLink *)displayLink;
+
+@end
+
+
+@interface AMapMarkerDragDisplayLinkTarget : NSObject
+
+/// 接收帧回调的弱引用代理对象。
+@property (nonatomic, weak) id<AMapMarkerDragDisplayLinkTargetDelegate> delegate;
+
+/// 将 CADisplayLink 帧回调转发给弱引用的 delegate。
+- (void)displayLinkDidFire:(CADisplayLink *)displayLink;
+
+@end
+
+
+@implementation AMapMarkerDragDisplayLinkTarget
+
+/// 将 CADisplayLink 帧回调转发给弱引用的 delegate。
+- (void)displayLinkDidFire:(CADisplayLink *)displayLink {
+    [self.delegate markerDragDisplayLinkDidFire:displayLink];
+}
+
+@end
+
+@interface AMapViewController ()<MAMapViewDelegate, AMapMarkerDragDisplayLinkTargetDelegate>
 
 @property (nonatomic,strong) MAMapView *mapView;
 @property (nonatomic,strong) FlutterMethodChannel *channel;
@@ -42,6 +71,24 @@
 @property (nonatomic,assign) BOOL mapInitCompleted;//地图初始化完成，首帧回调的标记
 
 @property (nonatomic,assign) MAMapRect initLimitMapRect;//初始化时，限制的地图范围；如果为{0,0,0,0},则没有限制
+
+/// 驱动 Marker 拖拽位置采样的帧计时器。
+@property (nonatomic,strong) CADisplayLink *markerDragDisplayLink;
+
+/// CADisplayLink 的弱代理目标，避免 DisplayLink 直接持有地图控制器。
+@property (nonatomic,strong) AMapMarkerDragDisplayLinkTarget *markerDragDisplayLinkTarget;
+
+/// 当前正在拖拽的 Marker 视图，由地图持有，因此这里只保留弱引用。
+@property (nonatomic,weak) MAAnnotationView *draggingMarkerView;
+
+/// 当前正在拖拽的 Marker 在 Dart 侧的唯一标识。
+@property (nonatomic,copy) NSString *draggingMarkerId;
+
+/// 最近一次已发送到 Dart 的拖拽坐标，用于过滤重复事件。
+@property (nonatomic,assign) CLLocationCoordinate2D lastDraggingMarkerPosition;
+
+/// 是否已经记录可用于比较的上一次拖拽坐标。
+@property (nonatomic,assign) BOOL hasLastDraggingMarkerPosition;
 
 @end
 
@@ -129,6 +176,7 @@
 }
 
 - (void)dealloc {
+    [self stopMarkerDragSampling];
     if (MAMapRectIsEmpty(_initLimitMapRect) == NO) {//避免没有开始渲染，frame监听还存在时，快速销毁
         [_mapView removeObserver:self forKeyPath:@"frame"];
     }
@@ -391,6 +439,109 @@
     [_markerController onMarkerTap:fAnno.markerId];
 }
 
+/// 根据 Marker 视图的实际锚点位置反算地图坐标。
+/// @param view 当前正在拖拽的 Marker 视图
+/// @param position 用于接收反算后坐标的指针
+/// @return 视图当前位置能否转换为有效地图坐标
+- (BOOL)draggingMarkerPositionForView:(MAAnnotationView *)view
+                            position:(CLLocationCoordinate2D *)position {
+    if (view == nil || view.superview == nil || position == NULL) {
+        return NO;
+    }
+
+    CGPoint anchorPoint = CGPointMake(CGRectGetMidX(view.bounds) - view.centerOffset.x,
+                                      CGRectGetMidY(view.bounds) - view.centerOffset.y);
+    CGPoint pointInMapView = [view convertPoint:anchorPoint toView:self.mapView];
+    CLLocationCoordinate2D convertedPosition =
+        [self.mapView convertPoint:pointInMapView toCoordinateFromView:self.mapView];
+    if (CLLocationCoordinate2DIsValid(convertedPosition) == NO) {
+        return NO;
+    }
+
+    *position = convertedPosition;
+    return YES;
+}
+
+/// 启动 Marker 拖拽位置采样。
+/// @param view 当前正在拖拽的 Marker 视图
+/// @param markerId Marker 在 Dart 侧的唯一标识
+- (void)startMarkerDragSamplingForView:(MAAnnotationView *)view markerId:(NSString *)markerId {
+    [self stopMarkerDragSampling];
+
+    self.draggingMarkerView = view;
+    self.draggingMarkerId = markerId;
+    CLLocationCoordinate2D position;
+    self.hasLastDraggingMarkerPosition =
+        [self draggingMarkerPositionForView:view position:&position];
+    if (self.hasLastDraggingMarkerPosition) {
+        self.lastDraggingMarkerPosition = position;
+    }
+
+    NSInteger frequency = [self.markerController draggingEventFrequencyForMarkerId:markerId];
+    NSInteger maximumFramesPerSecond = view.window.screen.maximumFramesPerSecond;
+    if (maximumFramesPerSecond <= 0) {
+        maximumFramesPerSecond = UIScreen.mainScreen.maximumFramesPerSecond;
+    }
+    frequency = MIN(frequency, maximumFramesPerSecond);
+
+    AMapMarkerDragDisplayLinkTarget *target = [[AMapMarkerDragDisplayLinkTarget alloc] init];
+    target.delegate = self;
+    CADisplayLink *displayLink = [CADisplayLink displayLinkWithTarget:target
+                                                            selector:@selector(displayLinkDidFire:)];
+    if (@available(iOS 15.0, *)) {
+        displayLink.preferredFrameRateRange = CAFrameRateRangeMake(frequency, frequency, frequency);
+    } else {
+        displayLink.preferredFramesPerSecond = frequency;
+    }
+
+    self.markerDragDisplayLinkTarget = target;
+    self.markerDragDisplayLink = displayLink;
+    [displayLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+}
+
+/// 停止 Marker 拖拽位置采样并释放相关引用。
+- (void)stopMarkerDragSampling {
+    [self.markerDragDisplayLink invalidate];
+    self.markerDragDisplayLink = nil;
+    self.markerDragDisplayLinkTarget.delegate = nil;
+    self.markerDragDisplayLinkTarget = nil;
+    self.draggingMarkerView = nil;
+    self.draggingMarkerId = nil;
+    self.hasLastDraggingMarkerPosition = NO;
+}
+
+/// 根据 Marker 视图位置采样当前拖拽坐标，仅在坐标发生变化时向 Dart 发送事件。
+- (void)emitDraggingMarkerPositionIfNeeded {
+    MAAnnotationView *view = self.draggingMarkerView;
+    NSString *markerId = self.draggingMarkerId;
+    if (view == nil || markerId == nil ||
+        [view.annotation isKindOfClass:[MAPointAnnotation class]] == NO) {
+        [self stopMarkerDragSampling];
+        return;
+    }
+
+    CLLocationCoordinate2D position;
+    if ([self draggingMarkerPositionForView:view position:&position] == NO) {
+        return;
+    }
+
+    if (self.hasLastDraggingMarkerPosition &&
+        self.lastDraggingMarkerPosition.latitude == position.latitude &&
+        self.lastDraggingMarkerPosition.longitude == position.longitude) {
+        return;
+    }
+
+    self.lastDraggingMarkerPosition = position;
+    self.hasLastDraggingMarkerPosition = YES;
+    [self.markerController onMarker:markerId draggingPosition:position];
+}
+
+/// CADisplayLink 帧回调，用于触发一次拖拽位置采样。
+/// @param displayLink 当前拖拽使用的 CADisplayLink
+- (void)markerDragDisplayLinkDidFire:(CADisplayLink *)displayLink {
+    [self emitDraggingMarkerPositionIfNeeded];
+}
+
 /**
  * @brief 拖动annotation view时view的状态变化
  * @param mapView 地图View
@@ -400,12 +551,34 @@
  */
 - (void)mapView:(MAMapView *)mapView annotationView:(MAAnnotationView *)view didChangeDragState:(MAAnnotationViewDragState)newState
    fromOldState:(MAAnnotationViewDragState)oldState {
-    if (newState == MAAnnotationViewDragStateEnding) {
-        MAPointAnnotation *fAnno = view.annotation;
-        if (fAnno.markerId == nil) {
-            return;
+    if ([view.annotation isKindOfClass:[MAPointAnnotation class]] == NO) {
+        return;
+    }
+    MAPointAnnotation *fAnno = view.annotation;
+    if (fAnno.markerId == nil) {
+        return;
+    }
+    if (newState == MAAnnotationViewDragStateStarting) {
+        [self startMarkerDragSamplingForView:view markerId:fAnno.markerId];
+        [_markerController onMarker:fAnno.markerId dragStartPosition:fAnno.coordinate];
+    } else if (newState == MAAnnotationViewDragStateDragging) {
+        [self emitDraggingMarkerPositionIfNeeded];
+    } else if (newState == MAAnnotationViewDragStateEnding ||
+               newState == MAAnnotationViewDragStateCanceling) {
+        CLLocationCoordinate2D endPosition;
+        BOOL hasEndPosition = [self draggingMarkerPositionForView:view position:&endPosition];
+        if (hasEndPosition == NO && self.hasLastDraggingMarkerPosition &&
+            [self.draggingMarkerId isEqualToString:fAnno.markerId]) {
+            endPosition = self.lastDraggingMarkerPosition;
+            hasEndPosition = YES;
         }
-        [_markerController onMarker:fAnno.markerId endPostion:fAnno.coordinate];
+        if (hasEndPosition == NO) {
+            endPosition = fAnno.coordinate;
+        }
+        [self stopMarkerDragSampling];
+        [_markerController onMarker:fAnno.markerId dragEndPosition:endPosition];
+    } else if (newState == MAAnnotationViewDragStateNone) {
+        [self stopMarkerDragSampling];
     }
 }
 

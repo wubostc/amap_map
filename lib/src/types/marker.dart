@@ -7,7 +7,14 @@ import 'package:amap_map2/src/types/base_overlay.dart';
 import 'package:x_amap_base/x_amap_base.dart';
 import 'bitmap.dart';
 
-/// Marker拖动回调
+/// Marker开始拖拽回调
+typedef MarkerDragStartCallback = void Function(
+    String id, LatLng startPosition);
+
+/// Marker拖拽中回调
+typedef MarkerDragCallback = void Function(String id, LatLng position);
+
+/// Marker拖动结束回调
 typedef MarkerDragEndCallback = void Function(String id, LatLng endPosition);
 
 ///Marker的气泡
@@ -77,6 +84,9 @@ class InfoWindow {
 
 /// 点覆盖物的类
 class Marker extends BaseOverlay {
+  /// Marker 拖拽中事件的默认采样频率。
+  static const int defaultDraggingEventFrequency = 30;
+
   /// 透明度
   final double alpha;
 
@@ -118,6 +128,17 @@ class Marker extends BaseOverlay {
   /// 回调的参数是对应的id
   final ArgumentCallback<String>? onTap;
 
+  /// Marker开始拖拽的回调
+  final MarkerDragStartCallback? onDragStart;
+
+  /// Marker拖拽中的回调
+  final MarkerDragCallback? onDrag;
+
+  /// Marker拖拽中事件的采样频率，单位为 FPS，取值范围为 1～120。
+  ///
+  /// 目前仅用于 iOS；Android 使用地图 SDK 原生的连续拖拽回调。
+  final int draggingEventFrequency;
+
   /// Marker被拖拽结束的回调
   final MarkerDragEndCallback? onDragEnd;
 
@@ -134,8 +155,12 @@ class Marker extends BaseOverlay {
     this.visible = true,
     this.zIndex = 0.0,
     this.onTap,
+    this.onDragStart,
+    this.onDrag,
+    int draggingEventFrequency = defaultDraggingEventFrequency,
     this.onDragEnd,
   })  : alpha = ((alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha))),
+        draggingEventFrequency = draggingEventFrequency.clamp(1, 120).toInt(),
         anchor =
             (((anchor.dx < 0 || anchor.dx > 1 || anchor.dy < 0 || anchor.dy > 1)
                 ? const Offset(0.5, 1.0)
@@ -156,6 +181,9 @@ class Marker extends BaseOverlay {
     bool? visible,
     double? zIndex,
     ArgumentCallback<String?>? onTap,
+    MarkerDragStartCallback? onDragStart,
+    MarkerDragCallback? onDrag,
+    int? draggingEventFrequency,
     MarkerDragEndCallback? onDragEnd,
   }) {
     Marker copyMark = Marker(
@@ -171,6 +199,10 @@ class Marker extends BaseOverlay {
       visible: visible ?? this.visible,
       zIndex: zIndex ?? this.zIndex,
       onTap: onTap ?? this.onTap,
+      onDragStart: onDragStart ?? this.onDragStart,
+      onDrag: onDrag ?? this.onDrag,
+      draggingEventFrequency:
+          draggingEventFrequency ?? this.draggingEventFrequency,
       onDragEnd: onDragEnd ?? this.onDragEnd,
     );
     copyMark.setIdForCopy(id);
@@ -195,6 +227,8 @@ class Marker extends BaseOverlay {
       'rotation': rotation,
       'visible': visible,
       'zIndex': zIndex,
+      if (draggingEventFrequency != defaultDraggingEventFrequency)
+        'draggingEventFrequency': draggingEventFrequency,
     };
   }
 
@@ -219,7 +253,8 @@ class Marker extends BaseOverlay {
         position == typedOther.position &&
         rotation == typedOther.rotation &&
         visible == typedOther.visible &&
-        zIndex == typedOther.zIndex;
+        zIndex == typedOther.zIndex &&
+        draggingEventFrequency == typedOther.draggingEventFrequency;
   }
 
   @override
@@ -227,7 +262,7 @@ class Marker extends BaseOverlay {
     return 'Marker{id: $id, alpha: $alpha, anchor: $anchor, '
         'clickable: $clickable, draggable: $draggable,'
         'icon: $icon, infoWindowEnable: $infoWindowEnable, infoWindow: $infoWindow, position: $position, rotation: $rotation, '
-        'visible: $visible, zIndex: $zIndex, onTap: $onTap}';
+        'visible: $visible, zIndex: $zIndex, draggingEventFrequency: $draggingEventFrequency, onTap: $onTap}';
   }
 
   @override
@@ -243,7 +278,8 @@ class Marker extends BaseOverlay {
         position,
         rotation,
         visible,
-        zIndex
+        zIndex,
+        draggingEventFrequency,
       ]);
 }
 

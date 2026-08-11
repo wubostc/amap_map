@@ -58,6 +58,134 @@ void main() {
     expect(enabledMarker.toMap()['infoWindowEnable'], isTrue);
   });
 
+  test('Marker copyWith preserves drag callbacks', () {
+    final List<String> eventIds = <String>[];
+    final List<LatLng> eventPositions = <LatLng>[];
+    final Marker marker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      onDragStart: (String markerId, LatLng position) {
+        eventIds.add('start:$markerId');
+        eventPositions.add(position);
+      },
+      onDrag: (String markerId, LatLng position) {
+        eventIds.add('drag:$markerId');
+        eventPositions.add(position);
+      },
+      onDragEnd: (String markerId, LatLng position) {
+        eventIds.add('end:$markerId');
+        eventPositions.add(position);
+      },
+    );
+
+    final Marker copy = marker.copyWith(alpha: 0.5);
+    copy.onDragStart?.call(copy.id, const LatLng(1, 2));
+    copy.onDrag?.call(copy.id, const LatLng(3, 4));
+    copy.onDragEnd?.call(copy.id, const LatLng(5, 6));
+
+    expect(copy.onDragStart, same(marker.onDragStart));
+    expect(copy.onDrag, same(marker.onDrag));
+    expect(copy.onDragEnd, same(marker.onDragEnd));
+    expect(eventIds, <String>[
+      'start:${marker.id}',
+      'drag:${marker.id}',
+      'end:${marker.id}',
+    ]);
+    expect(eventPositions, <LatLng>[
+      const LatLng(1, 2),
+      const LatLng(3, 4),
+      const LatLng(5, 6),
+    ]);
+  });
+
+  test('Marker only serializes a non-default dragging event frequency', () {
+    final Marker defaultMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+    );
+    final Marker customMarker = defaultMarker.copyWith(
+      draggingEventFrequency: 20,
+    );
+
+    expect(defaultMarker.draggingEventFrequency, 30);
+    expect(defaultMarker.toMap(), isNot(contains('draggingEventFrequency')));
+    expect(customMarker.draggingEventFrequency, 20);
+    expect(customMarker.toMap()['draggingEventFrequency'], 20);
+  });
+
+  test('Marker clamps dragging event frequency to the supported range', () {
+    final Marker lowFrequencyMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 0,
+    );
+    final Marker highFrequencyMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 121,
+    );
+
+    expect(lowFrequencyMarker.draggingEventFrequency, 1);
+    expect(highFrequencyMarker.draggingEventFrequency, 120);
+    expect(lowFrequencyMarker.toMap()['draggingEventFrequency'], 1);
+    expect(highFrequencyMarker.toMap()['draggingEventFrequency'], 120);
+  });
+
+  test('Marker accepts and serializes dragging event frequency boundaries', () {
+    final Marker minimumFrequencyMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 1,
+    );
+    final Marker maximumFrequencyMarker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 120,
+    );
+
+    expect(minimumFrequencyMarker.draggingEventFrequency, 1);
+    expect(minimumFrequencyMarker.toMap()['draggingEventFrequency'], 1);
+    expect(maximumFrequencyMarker.draggingEventFrequency, 120);
+    expect(maximumFrequencyMarker.toMap()['draggingEventFrequency'], 120);
+  });
+
+  test('Marker copyWith and clone preserve dragging event frequency', () {
+    final Marker marker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 60,
+    );
+
+    final Marker copy = marker.copyWith(alpha: 0.5);
+    final Marker clone = marker.clone();
+    final Marker resetToDefault = marker.copyWith(
+      draggingEventFrequency: Marker.defaultDraggingEventFrequency,
+    );
+
+    expect(copy.id, marker.id);
+    expect(copy.draggingEventFrequency, 60);
+    expect(copy.toMap()['draggingEventFrequency'], 60);
+    expect(clone.id, marker.id);
+    expect(clone.draggingEventFrequency, 60);
+    expect(clone.toMap()['draggingEventFrequency'], 60);
+    expect(
+      resetToDefault.draggingEventFrequency,
+      Marker.defaultDraggingEventFrequency,
+    );
+    expect(
+      resetToDefault.toMap(),
+      isNot(contains('draggingEventFrequency')),
+    );
+  });
+
+  test('Marker equality and hashCode include dragging event frequency', () {
+    final Marker marker = Marker(
+      position: const LatLng(39.909187, 116.397451),
+      draggingEventFrequency: 60,
+    );
+    final Marker sameFrequency = marker.copyWith();
+    final Marker differentFrequency = marker.copyWith(
+      draggingEventFrequency: 20,
+    );
+
+    expect(sameFrequency, marker);
+    expect(sameFrequency.hashCode, marker.hashCode);
+    expect(differentFrequency, isNot(marker));
+  });
+
   test('Polygon defensively copies points', () {
     final List<LatLng> points = <LatLng>[
       const LatLng(39.0, 116.0),
