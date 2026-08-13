@@ -136,6 +136,27 @@ class AMapController {
     return _methodChannel.takeSnapshot(mapId: mapId);
   }
 
+  /// 按地理区域截取地图，并返回指定物理像素尺寸的 PNG 数据。
+  ///
+  /// [topLeft] 和 [topRight] 定义截图区域的上边界，二者必须位于同一纬度，
+  /// 且当前不支持跨日期变更线。截图不会改变当前地图视角。
+  Future<Uint8List> takeRegionSnapshot({
+    required LatLng topLeft,
+    required LatLng topRight,
+    required int width,
+    required int height,
+    Duration timeout = const Duration(seconds: 30),
+  }) {
+    final RegionSnapshotRequest request = RegionSnapshotRequest(
+      topLeft: topLeft,
+      topRight: topRight,
+      width: width,
+      height: height,
+      timeout: timeout,
+    );
+    return _methodChannel.takeRegionSnapshot(mapId: mapId, request: request);
+  }
+
   /// 清空缓存
   Future<void> clearDisk() {
     return _methodChannel.clearDisk(mapId: mapId);

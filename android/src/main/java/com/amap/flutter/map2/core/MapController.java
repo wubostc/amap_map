@@ -1,8 +1,13 @@
 package com.amap.flutter.map2.core;
 
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.location.Location;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Size;
 
 import androidx.annotation.NonNull;
 
@@ -50,6 +55,9 @@ public class MapController
     private MethodChannel.Result mapReadyResult;
     private boolean mapLoaded = false;
     private boolean myLocationShowing = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Object regionSnapshotLock = new Object();
+    private boolean regionSnapshotInProgress = false;
 
     public MapController(MethodChannel methodChannel, TextureMapView mapView) {
         this.methodChannel = methodChannel;
@@ -123,6 +131,9 @@ public class MapController
                     }
                 });
                 break;
+            case Const.METHOD_MAP_TAKE_REGION_SNAPSHOT:
+                takeRegionSnapshot(call, result);
+                break;
             case Const.METHOD_MAP_CLEAR_DISK:
                 amap.removecache();
                 result.success(null);
@@ -142,6 +153,166 @@ public class MapController
                 break;
         }
 
+    }
+
+    private void takeRegionSnapshot(MethodCall call, MethodChannel.Result result) {
+        final Object topLeftValue = call.argument("topLeft");
+        final Object topRightValue = call.argument("topRight");
+        final Number widthValue = call.argument("width");
+        final Number heightValue = call.argument("height");
+        final Number timeoutValue = call.argument("timeoutMilliseconds");
+        if (topLeftValue == null || topRightValue == null || widthValue == null
+                || heightValue == null || timeoutValue == null) {
+            result.error("invalid_arguments", "区域截图参数不完整", null);
+            return;
+        }
+
+        final int width = widthValue.intValue();
+        final int height = heightValue.intValue();
+        final long timeoutMilliseconds = timeoutValue.longValue();
+        if (width <= 0 || height <= 0 || timeoutMilliseconds <= 0) {
+            result.error("invalid_arguments", "区域截图尺寸或超时时间无效", null);
+            return;
+        }
+
+        final LatLng topLeft;
+        final LatLng topRight;
+        try {
+            topLeft = ConvertUtil.toLatLng(topLeftValue);
+            topRight = ConvertUtil.toLatLng(topRightValue);
+        } catch (Throwable error) {
+            result.error("invalid_arguments", "区域截图坐标无效", error.getMessage());
+            return;
+        }
+        if (Math.abs(topLeft.latitude - topRight.latitude) > 0.0000001
+                || topLeft.longitude >= topRight.longitude) {
+            result.error("invalid_arguments", "区域截图坐标范围无效", null);
+            return;
+        }
+
+        synchronized (regionSnapshotLock) {
+            if (regionSnapshotInProgress) {
+                result.error("snapshot_busy", "当前地图已有区域截图任务", null);
+                return;
+            }
+            regionSnapshotInProgress = true;
+        }
+
+        RegionSnapshotSession session = null;
+        try {
+            session = new RegionSnapshotSession(width, height, result);
+            final RegionSnapshotSession activeSession = session;
+            amap.getMapRegionSnapshot(topLeft, topRight, new Size(width, height),
+                    new AMap.OnMapSnapshotListener() {
+                        @Override
+                        public void onMapTile(Rect rect, Bitmap bitmap, int state) {
+                            activeSession.addTile(rect, bitmap, state);
+                        }
+
+                        @Override
+                        public void onFinish() {
+                            activeSession.finish();
+                        }
+                    });
+            if (!activeSession.isFinished()) {
+                mainHandler.postDelayed(activeSession, timeoutMilliseconds);
+            }
+        } catch (Throwable error) {
+            if (session != null) {
+                session.abort();
+            } else {
+                releaseRegionSnapshot();
+            }
+            result.error("snapshot_rejected", "地图 SDK 拒绝区域截图请求", error.getMessage());
+        }
+    }
+
+    private void releaseRegionSnapshot() {
+        synchronized (regionSnapshotLock) {
+            regionSnapshotInProgress = false;
+        }
+    }
+
+    private final class RegionSnapshotSession implements Runnable {
+        private final Bitmap output;
+        private final Canvas canvas;
+        private final MethodChannel.Result result;
+        private boolean finished;
+        private boolean hasTile;
+        private boolean incomplete;
+
+        RegionSnapshotSession(int width, int height, MethodChannel.Result result) {
+            output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            canvas = new Canvas(output);
+            this.result = result;
+        }
+
+        synchronized void addTile(Rect rect, Bitmap bitmap, int state) {
+            if (finished) {
+                return;
+            }
+            if (rect == null || rect.isEmpty() || bitmap == null || bitmap.isRecycled()) {
+                incomplete = true;
+                return;
+            }
+            hasTile = true;
+            incomplete |= state != 1;
+            canvas.drawBitmap(bitmap, null, rect, null);
+        }
+
+        synchronized void finish() {
+            if (finished) {
+                return;
+            }
+            if (!hasTile) {
+                completeError("snapshot_failed", "地图 SDK 未返回区域截图瓦片");
+                return;
+            }
+            if (incomplete) {
+                completeError("snapshot_incomplete", "区域地图瓦片未完整加载");
+                return;
+            }
+
+            final ByteArrayOutputStream stream = new ByteArrayOutputStream();
+            if (!output.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                completeError("snapshot_failed", "区域截图 PNG 编码失败");
+                return;
+            }
+            finished = true;
+            mainHandler.removeCallbacks(this);
+            final byte[] bytes = stream.toByteArray();
+            output.recycle();
+            releaseRegionSnapshot();
+            mainHandler.post(() -> result.success(bytes));
+        }
+
+        synchronized boolean isFinished() {
+            return finished;
+        }
+
+        synchronized void abort() {
+            if (!finished) {
+                finished = true;
+                mainHandler.removeCallbacks(this);
+                output.recycle();
+            }
+            releaseRegionSnapshot();
+        }
+
+        @Override
+        public synchronized void run() {
+            if (!finished) {
+                completeError("snapshot_timeout", "区域截图超时");
+            }
+        }
+
+        private void completeError(String code, String message) {
+            finished = true;
+            mainHandler.removeCallbacks(this);
+            output.recycle();
+            releaseRegionSnapshot();
+            mainHandler.post(() -> result.error(code, message, null));
+        }
     }
 
     @Override

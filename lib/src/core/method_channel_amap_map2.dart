@@ -24,6 +24,7 @@ import 'package:stream_transform/stream_transform.dart';
 import '../types/marker_updates.dart';
 import '../types/polygon_updates.dart';
 import '../types/polyline_updates.dart';
+import 'region_snapshot_request.dart';
 import 'map_event.dart';
 
 // ignore: constant_identifier_names
@@ -295,6 +296,24 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
     required int mapId,
   }) {
     return channel(mapId).invokeMethod<Uint8List>('map#takeSnapshot');
+  }
+
+  /// 按地理区域截取地图，返回指定像素尺寸的 PNG 数据。
+  Future<Uint8List> takeRegionSnapshot({
+    required int mapId,
+    required RegionSnapshotRequest request,
+  }) async {
+    final Uint8List? bytes = await channel(mapId).invokeMethod<Uint8List>(
+      'map#takeRegionSnapshot',
+      request.toMap(),
+    );
+    if (bytes == null) {
+      throw PlatformException(
+        code: 'snapshot_failed',
+        message: '原生地图 SDK 未返回区域截图数据',
+      );
+    }
+    return bytes;
   }
 
   Future<void> clearDisk({
