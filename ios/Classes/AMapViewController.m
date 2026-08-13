@@ -27,6 +27,7 @@
 #import "AMapConvertUtil.h"
 #import "FlutterMethodChannel+MethodCallDispatch.h"
 #import <QuartzCore/QuartzCore.h>
+#import <MAMapKit/MAMapSnapshot.h>
 
 @protocol AMapMarkerDragDisplayLinkTargetDelegate <NSObject>
 
@@ -89,6 +90,12 @@
 
 /// 是否已经记录可用于比较的上一次拖拽坐标。
 @property (nonatomic,assign) BOOL hasLastDraggingMarkerPosition;
+
+/// 强持有异步区域截图对象，完成或超时后释放。
+@property (nonatomic,strong) MAMapSnapshot *regionSnapshot;
+
+/// 用于忽略已超时任务的迟到回调。
+@property (nonatomic,assign) NSUInteger regionSnapshotGeneration;
 
 @end
 
@@ -265,6 +272,9 @@
             }
         }];
     }];
+    [self.channel addMethodName:@"map#takeRegionSnapshot" withHandler:^(FlutterMethodCall * _Nonnull call, FlutterResult  _Nonnull result) {
+        [weakSelf takeRegionSnapshotWithArguments:call.arguments result:result];
+    }];
     [self.channel addMethodName:@"map#setRenderFps" withHandler:^(FlutterMethodCall * _Nonnull call, FlutterResult  _Nonnull result) {
         NSInteger fps = [call.arguments[@"fps"] integerValue];
         [weakSelf.mapView setMaxRenderFrame:fps];
@@ -292,6 +302,107 @@
         CLLocationCoordinate2D coordinate = [weakSelf.mapView convertPoint:point toCoordinateFromView:weakSelf.mapView];
         result([AMapConvertUtil arrayFromLocation:coordinate]);
     }];
+}
+
+- (void)takeRegionSnapshotWithArguments:(NSDictionary *)arguments result:(FlutterResult)result {
+    if (![arguments isKindOfClass:[NSDictionary class]]) {
+        result([FlutterError errorWithCode:@"invalid_arguments" message:@"区域截图参数无效" details:nil]);
+        return;
+    }
+
+    NSArray *topLeftValue = arguments[@"topLeft"];
+    NSArray *topRightValue = arguments[@"topRight"];
+    NSNumber *widthValue = arguments[@"width"];
+    NSNumber *heightValue = arguments[@"height"];
+    NSNumber *timeoutValue = arguments[@"timeoutMilliseconds"];
+    if (![topLeftValue isKindOfClass:[NSArray class]] || topLeftValue.count != 2 ||
+        ![topRightValue isKindOfClass:[NSArray class]] || topRightValue.count != 2 ||
+        ![widthValue isKindOfClass:[NSNumber class]] || ![heightValue isKindOfClass:[NSNumber class]] ||
+        ![timeoutValue isKindOfClass:[NSNumber class]]) {
+        result([FlutterError errorWithCode:@"invalid_arguments" message:@"区域截图参数不完整" details:nil]);
+        return;
+    }
+
+    NSInteger width = widthValue.integerValue;
+    NSInteger height = heightValue.integerValue;
+    NSInteger timeoutMilliseconds = timeoutValue.integerValue;
+    CLLocationCoordinate2D topLeft = [AMapConvertUtil coordinateFromArray:topLeftValue];
+    CLLocationCoordinate2D topRight = [AMapConvertUtil coordinateFromArray:topRightValue];
+    if (width <= 0 || height <= 0 || timeoutMilliseconds <= 0 ||
+        fabs(topLeft.latitude - topRight.latitude) > 0.0000001 ||
+        topLeft.longitude >= topRight.longitude) {
+        result([FlutterError errorWithCode:@"invalid_arguments" message:@"区域截图坐标、尺寸或超时时间无效" details:nil]);
+        return;
+    }
+    if (self.regionSnapshot != nil) {
+        result([FlutterError errorWithCode:@"snapshot_busy" message:@"当前地图已有区域截图任务" details:nil]);
+        return;
+    }
+
+    MAMapSnapshot *snapshot = [[MAMapSnapshot alloc] init:self.mapView];
+    self.regionSnapshot = snapshot;
+    NSUInteger generation = ++self.regionSnapshotGeneration;
+    __weak __typeof__(self) weakSelf = self;
+    BOOL accepted = [snapshot capture:CGSizeMake(width, height)
+                              topLeft:topLeft
+                             topRight:topRight
+                             complete:^(UIImage *image, NSInteger state) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong __typeof__(weakSelf) strongSelf = weakSelf;
+            if (strongSelf == nil || strongSelf.regionSnapshot == nil ||
+                strongSelf.regionSnapshotGeneration != generation) {
+                return;
+            }
+            strongSelf.regionSnapshot = nil;
+            if (state != 1) {
+                result([FlutterError errorWithCode:@"snapshot_incomplete" message:@"区域地图瓦片未完整加载" details:nil]);
+                return;
+            }
+            if (image == nil) {
+                result([FlutterError errorWithCode:@"snapshot_failed" message:@"地图 SDK 未返回区域截图" details:nil]);
+                return;
+            }
+
+            UIImage *output = [strongSelf image:image normalizedToPixelSize:CGSizeMake(width, height)];
+            NSData *data = UIImagePNGRepresentation(output);
+            if (data == nil) {
+                result([FlutterError errorWithCode:@"snapshot_failed" message:@"区域截图 PNG 编码失败" details:nil]);
+                return;
+            }
+            result([FlutterStandardTypedData typedDataWithBytes:data]);
+        });
+    }];
+
+    if (!accepted) {
+        self.regionSnapshot = nil;
+        result([FlutterError errorWithCode:@"snapshot_rejected"
+                                   message:@"地图 SDK 拒绝区域截图请求"
+                                   details:@{ @"minSize": NSStringFromCGSize(snapshot.minSize),
+                                              @"maxSize": NSStringFromCGSize(snapshot.maxSize) }]);
+        return;
+    }
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutMilliseconds * NSEC_PER_MSEC)),
+                   dispatch_get_main_queue(), ^{
+        __strong __typeof__(weakSelf) strongSelf = weakSelf;
+        if (strongSelf != nil && strongSelf.regionSnapshot != nil &&
+            strongSelf.regionSnapshotGeneration == generation) {
+            strongSelf.regionSnapshot = nil;
+            result([FlutterError errorWithCode:@"snapshot_timeout" message:@"区域截图超时" details:nil]);
+        }
+    });
+}
+
+- (UIImage *)image:(UIImage *)image normalizedToPixelSize:(CGSize)pixelSize {
+    if (CGImageGetWidth(image.CGImage) == (size_t)pixelSize.width &&
+        CGImageGetHeight(image.CGImage) == (size_t)pixelSize.height) {
+        return image;
+    }
+    UIGraphicsBeginImageContextWithOptions(pixelSize, NO, 1.0);
+    [image drawInRect:CGRectMake(0, 0, pixelSize.width, pixelSize.height)];
+    UIImage *normalized = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return normalized ?: image;
 }
 
 //MARK: MAMapViewDelegate

@@ -541,6 +541,22 @@ await controller?.removePolygon(polygon.id);
 
 ## 控制地图
 
+### 区域截图
+
+可按左上、右上坐标截取指定区域，输出为指定物理像素尺寸的 PNG，且不会改变当前地图视角：
+
+```dart
+final Uint8List pngBytes = await controller.takeRegionSnapshot(
+  topLeft: const LatLng(39.95, 116.30),
+  topRight: const LatLng(39.95, 116.50),
+  width: 1200,
+  height: 800,
+  timeout: const Duration(seconds: 30),
+);
+```
+
+`topLeft` 与 `topRight` 必须位于同一纬度，且左侧经度小于右侧经度；暂不支持跨日期变更线。同一地图实例同时只执行一个区域截图任务，实际可用尺寸取决于原生地图 SDK 和设备内存。
+
 ```dart
 await controller?.moveCamera(
   CameraUpdate.newLatLngZoom(

@@ -19,6 +19,7 @@ import 'package:x_amap_base/x_amap_base.dart';
 import 'package:amap_map2/src/core/amap_flutter_platform.dart';
 import 'package:amap_map2/src/core/map_event.dart';
 import 'package:amap_map2/src/core/method_channel_amap_map2.dart';
+import 'package:amap_map2/src/core/region_snapshot_request.dart';
 import 'package:amap_map2/src/types/types.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
