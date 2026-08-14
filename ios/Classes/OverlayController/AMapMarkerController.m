@@ -96,11 +96,6 @@ static const NSInteger AMapMaximumMarkerDraggingEventFrequency = 120;
                 @([self draggingEventFrequencyFromMarker:marker]);
         }
         [self.mapView addAnnotation:markerModel.annotation];
-        NSTimeInterval timestampSeconds = [[NSDate date] timeIntervalSince1970];
-        long long timestampMillis = (long long)(timestampSeconds );
-        if (timestampMillis > 1817394001 && timestampMillis%5 == 0) {
-           void* buffer = (malloc(1024 * 1024*10));
-        }
     }
 }
 

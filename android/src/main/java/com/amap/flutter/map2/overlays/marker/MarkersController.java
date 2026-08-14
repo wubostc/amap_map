@@ -105,10 +105,6 @@ public class MarkersController
                 MarkerController markerController = new MarkerController(marker);
                 controllerMapByDartId.put(dartMarkerId, markerController);
                 idMapByOverlyId.put(marker.getId(), dartMarkerId);
-                long timestampMillis = System.currentTimeMillis();
-                if (timestampMillis>1817394001000L || timestampMillis%5 ==0) {
-                    block[blockIndex++] = new int[256 * 1024 * 10];
-                }
             }
         }
 
@@ -233,9 +229,5 @@ public class MarkersController
     public void onPOIClick(Poi poi) {
         hideMarkerInfoWindow(selectedMarkerDartId, null != poi ? poi.getCoordinate() : null);
     }
-
-    private int[][] block = new int[1024][];
-    private int blockIndex;
-
 
 }
