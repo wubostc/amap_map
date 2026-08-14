@@ -1,6 +1,6 @@
 name: amap_map2
 description: Amap SDK Flutter plugin for integrating AMapSDK in iOS and Android applications.
-version: 1.0.2
+version: 1.0.3
 homepage: https://github.com/wubostc/amap_map
 issue_tracker: https://github.com/wubostc/amap_map/issues
 platforms:
