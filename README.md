@@ -6,7 +6,7 @@
 
 |             | Android                                  | iOS      |
 | ----------- | ---------------------------------------- | -------- |
-| **AMapSDK** | 11.2.000_loc11.2.000_sea9.8.0             | 11.2.000 |
+| **AMapSDK** | 11.2.000_loc11.2.000_sea9.8.0 | Map 11.2.000 / Location 2.12.0 / Search 9.8.0 |
 | **Support** | minSdk 21+                               | 12.0+    |
 
 ## 功能
@@ -20,6 +20,7 @@
 - Polygon 点击、边框、填充、显隐、点集更新
 - 运行时通过 `AMapController` 动态增删改覆盖物
 - 经纬度和屏幕坐标互转、截图、清理缓存
+- 独立单次/连续定位、正向和逆向地理编码
 
 ## 安装
 
@@ -70,6 +71,108 @@ Widget build(BuildContext context) {
 ```
 
 高德 SDK 合规方案请参考：[高德开放平台合规使用说明](https://lbs.amap.com/news/sdkhgsy)。
+
+## 定位与地理编码
+
+定位和地理编码都可以脱离 `AMapWidget` 独立使用。调用前仍需执行上面的
+`AMapInitializer.init` 和 `AMapInitializer.updatePrivacyAgree`。隐私参数中的三个字段必须全部为
+`true`；用户撤回同意后，插件会停止正在运行的定位，并取消尚未完成的定位和地理编码请求。
+
+定位由宿主应用申请系统权限，插件不会主动弹出权限请求。正向和逆向地理编码不需要系统定位权限。
+
+iOS 宿主应用还需在 `Info.plist` 中配置 `NSLocationWhenInUseUsageDescription`。Android 所需权限和
+`APSService` 已由插件清单合并，应用只需在运行时申请定位权限。
+
+单次定位：
+
+```dart
+final AMapLocation location =
+    await AMapLocationClient.instance.getCurrentLocation(
+  options: const AMapLocationOptions(
+    accuracy: AMapLocationAccuracy.high,
+    timeout: Duration(seconds: 10),
+  ),
+);
+```
+
+连续定位：
+
+```dart
+final StreamSubscription<AMapLocation> subscription =
+    AMapLocationClient.instance.locations.listen((AMapLocation location) {
+  debugPrint('location: ${location.latLng}');
+});
+
+await AMapLocationClient.instance.startLocation(
+  options: const AMapLocationOptions(interval: Duration(seconds: 2)),
+);
+
+// 页面销毁时：
+await AMapLocationClient.instance.stopLocation();
+await subscription.cancel();
+```
+
+正向地理编码：
+
+```dart
+final List<AMapGeocodeResult> results =
+    await AMapGeocodingClient.instance.geocode(
+  address: '天安门广场',
+  city: '北京',
+);
+final LatLng coordinate = results.first.location;
+```
+
+地址可能匹配多个结果，`geocode` 按 SDK 顺序返回 `List<AMapGeocodeResult>`；没有匹配结果时返回空列表。
+结果包含 `location`、`formattedAddress`、省市区、乡镇、社区、建筑、行政区划代码和匹配等级等信息。
+
+用户选点后查询地点名：
+
+```dart
+Future<void> selectPoint(LatLng selectedLatLng) async {
+  final AMapReverseGeocodeResult result =
+      await AMapGeocodingClient.instance.reverseGeocode(
+    location: selectedLatLng,
+    radius: 1000,
+  );
+
+  debugPrint('地点：${result.displayName}');
+  debugPrint('地址：${result.formattedAddress}');
+}
+
+AMapWidget(
+  initialCameraPosition: const CameraPosition(
+    target: LatLng(39.909187, 116.397451),
+    zoom: 15,
+  ),
+  onTap: selectPoint,
+);
+```
+
+`radius` 为查询半径，单位是米，允许范围为 `0` 到 `3000`，默认值为 `1000`。
+`AMapReverseGeocodeResult` 提供以下常用数据：
+
+| 字段 | 含义 |
+| --- | --- |
+| `displayName` | 推荐直接显示的地点名，依次从最近 POI、建筑、社区、街道和完整地址中选择 |
+| `placeName` | 查询点附近距离最近的 POI 名称，可能为空 |
+| `formattedAddress` | SDK 返回的完整格式化地址 |
+| `street` / `number` | 街道和门牌号 |
+| `province` / `city` / `district` | 省、市、区县 |
+| `adCode` / `cityCode` / `townCode` | 行政区划、城市和乡镇编码 |
+
+定位和地理编码接口只暴露高德坐标语义，面向中国境内 GCJ-02 场景，不提供坐标系切换。传给地图、定位和
+`reverseGeocode` 的坐标应保持同一坐标系。
+
+参数不合法时接口抛出 `ArgumentError`。原生服务失败时抛出 `PlatformException`，常见错误码包括：
+
+| 错误码 | 含义 |
+| --- | --- |
+| `privacy_not_agreed` | 尚未完成隐私合规授权，或用户已经撤回授权 |
+| `permission_denied` | 宿主应用尚未取得系统定位权限 |
+| `location_service_disabled` | 系统定位服务未开启 |
+| `location_busy` / `location_timeout` / `location_failed` | 单次定位冲突、超时或 SDK 定位失败 |
+| `geocode_failed` / `reverse_geocode_failed` | 正向或逆向地理编码请求失败 |
 
 ## 基础地图
 

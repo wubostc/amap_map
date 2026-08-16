@@ -1,3 +1,12 @@
+# amap_map2
+
+## 1.0.4
+2026-08-16
+* 新增 Android/iOS 独立单次定位和连续定位能力。
+* 新增正向和逆向地理编码，支持地址转高德坐标及选点后查询地点名和地址。
+* iOS 接入 AMapLocation 2.12.0 和 AMapSearch 9.8.0。
+* 用户撤回隐私授权时立即停止定位，并取消未完成的定位和地理编码请求。
+
 ## 1.0.3
 2026-08-14
 * 修复 Android/iOS 添加 Marker 时的异常内存分配问题。
@@ -18,6 +27,8 @@
 * 发布 `amap_map2` 初始版本，基于 `amap_map` 重命名。
 * 同步 Android/iOS 插件标识、文档、示例和测试。
 * 新增 Flutter 层 `Polygon.onTap` 命中判断，使用 `turf.booleanPointInPolygon`。
+
+# amap_map（原包）
 
 ## 1.0.15
 2025-03-21

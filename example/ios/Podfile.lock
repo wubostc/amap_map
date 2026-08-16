@@ -1,10 +1,16 @@
 PODS:
   - AMap3DMap (11.2.000):
     - AMapFoundation (>= 1.9.0)
-  - amap_map2 (1.0.0):
+  - amap_map2 (1.0.3):
     - AMap3DMap (= 11.2.000)
+    - AMapLocation (= 2.12.0)
+    - AMapSearch (= 9.8.0)
     - Flutter
   - AMapFoundation (1.9.0)
+  - AMapLocation (2.12.0):
+    - AMapFoundation (>= 1.9.0)
+  - AMapSearch (9.8.0):
+    - AMapFoundation (>= 1.9.0)
   - Flutter (1.0.0)
   - permission_handler_apple (9.4.8):
     - Flutter
@@ -18,6 +24,8 @@ SPEC REPOS:
   trunk:
     - AMap3DMap
     - AMapFoundation
+    - AMapLocation
+    - AMapSearch
 
 EXTERNAL SOURCES:
   amap_map2:
@@ -29,8 +37,10 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   AMap3DMap: 940c6f6ce6ff3089c5c2211b0dfb51ef43262fe8
-  amap_map2: 11f79d3622d994780326fca2ed51e768b4e14360
+  amap_map2: cc0c745cb8f5d987ad64348d439366fecb7d0193
   AMapFoundation: 5f01fcabd1e591967e52178d2d96dac843396285
+  AMapLocation: 51549dc73f5bfa8806c33857ad2079fa6215bb49
+  AMapSearch: ec339fc3cf772d5ff657f02397888391b4b1bde8
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
 

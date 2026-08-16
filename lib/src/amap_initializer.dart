@@ -40,5 +40,16 @@ class AMapInitializer {
   ///
   static void updatePrivacyAgree(AMapPrivacyStatement privacyStatement) {
     _privacyStatement = privacyStatement;
+    if (privacyStatement.hasContains != true ||
+        privacyStatement.hasShow != true ||
+        privacyStatement.hasAgree != true) {
+      // 撤回授权必须立即停止已运行的原生服务；插件尚未注册时忽略同步失败。
+      unawaited(AMapLocationClient._updatePrivacyStatement(privacyStatement)
+          .catchError((Object error) {
+        if (kDebugMode && error is! MissingPluginException) {
+          debugPrint('同步高德隐私状态失败: $error');
+        }
+      }));
+    }
   }
 }

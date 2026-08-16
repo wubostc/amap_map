@@ -34,6 +34,8 @@ import 'src/utils/polygon_hit_test.dart';
 export 'package:amap_map2/src/types/types.dart';
 
 part 'src/amap_initializer.dart';
+part 'src/amap_location_client.dart';
+part 'src/amap_geocoding_client.dart';
 part 'src/amap_controller.dart';
 part 'src/amap_widget.dart';
 part 'src/utils/location_utils.dart';
