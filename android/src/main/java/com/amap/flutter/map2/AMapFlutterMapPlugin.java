@@ -9,6 +9,8 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.embedding.engine.plugins.lifecycle.FlutterLifecycleAdapter;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.MethodChannel;
 
 /**
  * AmapFlutterMapPlugin
@@ -20,6 +22,10 @@ public class AMapFlutterMapPlugin implements
     private static final String VIEW_TYPE = "com.amap.flutter.map2";
     private Lifecycle lifecycle;
     private FlutterPluginBinding pluginBinding;
+    private AMapServicesController servicesController;
+    private MethodChannel locationChannel;
+    private MethodChannel geocodingChannel;
+    private EventChannel locationEventChannel;
 
     public AMapFlutterMapPlugin() {
     }
@@ -30,6 +36,13 @@ public class AMapFlutterMapPlugin implements
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         LogUtil.i(CLASS_NAME, "onAttachedToEngine==>");
         this.pluginBinding = binding;
+        servicesController = new AMapServicesController(binding.getApplicationContext());
+        locationChannel = new MethodChannel(binding.getBinaryMessenger(), "amap_map2/location");
+        geocodingChannel = new MethodChannel(binding.getBinaryMessenger(), "amap_map2/geocoding");
+        locationEventChannel = new EventChannel(binding.getBinaryMessenger(), "amap_map2/location_events");
+        locationChannel.setMethodCallHandler(servicesController);
+        geocodingChannel.setMethodCallHandler(servicesController);
+        locationEventChannel.setStreamHandler(servicesController);
         binding
                 .getPlatformViewRegistry()
                 .registerViewFactory(
@@ -42,6 +55,15 @@ public class AMapFlutterMapPlugin implements
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         LogUtil.i(CLASS_NAME, "onDetachedFromEngine==>");
+        locationChannel.setMethodCallHandler(null);
+        geocodingChannel.setMethodCallHandler(null);
+        locationEventChannel.setStreamHandler(null);
+        servicesController.dispose();
+        servicesController = null;
+        locationChannel = null;
+        geocodingChannel = null;
+        locationEventChannel = null;
+        pluginBinding = null;
     }
 
 

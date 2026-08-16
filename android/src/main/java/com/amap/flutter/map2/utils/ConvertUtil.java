@@ -9,6 +9,7 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 
+import com.amap.api.location.AMapLocationClient;
 import com.amap.api.maps.AMap;
 import com.amap.api.maps.CameraUpdate;
 import com.amap.api.maps.CameraUpdateFactory;
@@ -21,12 +22,12 @@ import com.amap.api.maps.model.LatLng;
 import com.amap.api.maps.model.LatLngBounds;
 import com.amap.api.maps.model.MyLocationStyle;
 import com.amap.api.maps.model.Poi;
+import com.amap.api.services.core.ServiceSettings;
 import com.amap.flutter.map2.core.AMapOptionsSink;
 import com.amap.flutter.map2.overlays.marker.MarkerIconDescriptorFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -69,7 +70,7 @@ public class ConvertUtil {
     }
 
     public static void setPrivacyStatement(Context context, Object object) {
-        if (null == object) {
+        if (context == null || !(object instanceof Map)) {
             return;
         }
         Map<?, ?> privacyStatementMap = toMap(object);
@@ -77,30 +78,20 @@ public class ConvertUtil {
         Object hasShowObj = privacyStatementMap.get("hasShow");
         Object hasAgreeObj = privacyStatementMap.get("hasAgree");
 
-        Class<MapsInitializer> clazz = MapsInitializer.class;
-
-        if (null != hasContainsObj
-                && null != hasShowObj) {
+        // 地图、定位和搜索 SDK 分别维护隐私状态，必须使用同一份声明同步更新。
+        if (hasContainsObj instanceof Boolean && hasShowObj instanceof Boolean) {
             boolean hasContains = toBoolean(hasContainsObj);
             boolean hasShow = toBoolean(hasShowObj);
-            //使用反射的方法调用适配之前的版本
-            try {
-                Method method = clazz.getMethod("updatePrivacyShow", Context.class, boolean.class, boolean.class);
-                method.invoke(null, context, hasContains, hasShow);
-            } catch (Throwable e) {
-//                e.printStackTrace();
-            }
+            MapsInitializer.updatePrivacyShow(context, hasContains, hasShow);
+            AMapLocationClient.updatePrivacyShow(context, hasContains, hasShow);
+            ServiceSettings.updatePrivacyShow(context, hasContains, hasShow);
         }
 
-        if (null != hasAgreeObj) {
+        if (hasAgreeObj instanceof Boolean) {
             boolean hasAgree = toBoolean(hasAgreeObj);
-            //使用反射的方法调用适配之前的版本
-            try {
-                Method method = clazz.getMethod("updatePrivacyAgree", Context.class, boolean.class);
-                method.invoke(null, context, hasAgree);
-            } catch (Throwable e) {
-//                e.printStackTrace();
-            }
+            MapsInitializer.updatePrivacyAgree(context, hasAgree);
+            AMapLocationClient.updatePrivacyAgree(context, hasAgree);
+            ServiceSettings.updatePrivacyAgree(context, hasAgree);
         }
     }
 

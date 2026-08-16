@@ -25,6 +25,7 @@
 #import "AMapLocation.h"
 #import "AMapJsonUtils.h"
 #import "AMapConvertUtil.h"
+#import "AMapPrivacyManager.h"
 #import "FlutterMethodChannel+MethodCallDispatch.h"
 #import <QuartzCore/QuartzCore.h>
 #import <MAMapKit/MAMapSnapshot.h>
@@ -132,7 +133,7 @@
         _viewId = viewId;
         
         if ([dict objectForKey:@"privacyStatement"] != nil) {
-            [self updatePrivacyStateWithDict:[dict objectForKey:@"privacyStatement"]];
+            [AMapPrivacyManager updatePrivacyWithStatement:[dict objectForKey:@"privacyStatement"]];
         }
 
         
@@ -186,22 +187,6 @@
     [self stopMarkerDragSampling];
     if (MAMapRectIsEmpty(_initLimitMapRect) == NO) {//避免没有开始渲染，frame监听还存在时，快速销毁
         [_mapView removeObserver:self forKeyPath:@"frame"];
-    }
-}
-
-- (void)updatePrivacyStateWithDict:(NSDictionary *)dict {
-    if ((MAMapVersionNumber) < 80100) {
-        NSLog(@"当前地图SDK版本没有隐私合规接口，请升级地图SDK到8.1.0及以上版本");
-        return;
-    }
-    if (dict == nil || [dict isKindOfClass:[NSDictionary class]] == NO) {
-        return;
-    }
-    if (dict[@"hasContains"] != nil && dict[@"hasShow"] != nil) {
-        [MAMapView updatePrivacyShow:[dict[@"hasShow"] integerValue] privacyInfo:[dict[@"hasContains"] integerValue]];
-    }
-    if (dict[@"hasAgree"] != nil) {
-        [MAMapView updatePrivacyAgree:[dict[@"hasAgree"] integerValue]];
     }
 }
 
