@@ -120,12 +120,4 @@ class AMapLocationClient {
       'privacyStatement': privacy!.toMap(),
     });
   }
-
-  static Future<void> _updatePrivacyStatement(
-    AMapPrivacyStatement privacyStatement,
-  ) =>
-      _channel.invokeMethod<void>(
-        'services#updatePrivacy',
-        privacyStatement.toMap(),
-      );
 }
