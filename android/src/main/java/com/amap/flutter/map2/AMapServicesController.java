@@ -14,10 +14,13 @@ import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationClient;
 import com.amap.api.location.AMapLocationClientOption;
 import com.amap.api.location.AMapLocationListener;
+import com.amap.api.maps.AMapUtils;
 import com.amap.api.maps.MapsInitializer;
+import com.amap.api.maps.model.LatLng;
 import com.amap.api.services.core.AMapException;
 import com.amap.api.services.core.LatLonPoint;
 import com.amap.api.services.core.PoiItem;
+import com.amap.api.services.core.PoiItemV2;
 import com.amap.api.services.core.ServiceSettings;
 import com.amap.api.services.geocoder.GeocodeAddress;
 import com.amap.api.services.geocoder.GeocodeQuery;
@@ -27,6 +30,13 @@ import com.amap.api.services.geocoder.RegeocodeAddress;
 import com.amap.api.services.geocoder.RegeocodeQuery;
 import com.amap.api.services.geocoder.RegeocodeResult;
 import com.amap.api.services.geocoder.StreetNumber;
+import com.amap.api.services.poisearch.Business;
+import com.amap.api.services.poisearch.IndoorDataV2;
+import com.amap.api.services.poisearch.Photo;
+import com.amap.api.services.poisearch.PoiNavi;
+import com.amap.api.services.poisearch.PoiResultV2;
+import com.amap.api.services.poisearch.PoiSearchV2;
+import com.amap.api.services.poisearch.SubPoiItemV2;
 import com.amap.flutter.map2.utils.ConvertUtil;
 
 import java.util.ArrayList;
@@ -54,6 +64,9 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
     private Runnable singleTimeout;
     // SDK 的搜索回调是异步的，请求完成前需要强引用 GeocodeSearch。
     private final Map<GeocodeSearch, MethodChannel.Result> geocodeSearches = new LinkedHashMap<>();
+    // PoiSearchV2 没有公开单请求取消方法，保留实例以便在生命周期结束
+    // 时解绑监听并完成 Flutter Result。
+    private final Map<PoiSearchV2, MethodChannel.Result> poiSearches = new LinkedHashMap<>();
 
     AMapServicesController(Context context) {
         Context applicationContext = context.getApplicationContext();
@@ -84,6 +97,9 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
                 break;
             case "geocoding#reverseGeocode":
                 reverseGeocode(arguments(call), result);
+                break;
+            case "poiSearch#search":
+                poiSearch(arguments(call), result);
                 break;
             default:
                 result.notImplemented();
@@ -310,6 +326,287 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         }
     }
 
+    private void poiSearch(Map<?, ?> values, MethodChannel.Result result) {
+        String mode = stringValue(values.get("mode"), "keyword");
+        String keyword = stringValue(values.get("keyword"), "").trim();
+        String category = stringOrNull(values.get("types"));
+        String city = stringOrNull(values.get("city"));
+        if (category == null) {
+            category = "";
+        }
+        if (city == null) {
+            city = "";
+        }
+        int page = intValue(values.get("page"), 1);
+        int pageSize = intValue(values.get("pageSize"), 20);
+        int showFields = intValue(values.get("showFields"), 0);
+        if (page < 1 || page > 100) {
+            result.error("poi_search_invalid_argument", "页码必须在 1 到 100 之间。", null);
+            return;
+        }
+        if (pageSize < 1 || pageSize > 25) {
+            result.error("poi_search_invalid_argument", "每页数量必须在 1 到 25 之间。", null);
+            return;
+        }
+        if (!"keyword".equals(mode) && !"around".equals(mode)) {
+            result.error("poi_search_invalid_argument", "不支持的 POI 查询类型。", null);
+            return;
+        }
+        if (keyword.isEmpty() && category.isEmpty()) {
+            result.error("poi_search_invalid_argument", "keyword 和 types 至少提供一个。", null);
+            return;
+        }
+        boolean cityLimit = booleanValue(values.get("cityLimit"), false);
+        if ("keyword".equals(mode) && cityLimit && city.isEmpty()) {
+            result.error("poi_search_invalid_argument", "cityLimit 为 true 时必须提供 city。", null);
+            return;
+        }
+        final LatLonPoint location = latLonPoint(values.get("location"));
+        // Only around searches have a distance center in the public API. A
+        // keyword query may also carry a location for sorting, but the native
+        // SDK does not define a per-result distance for that mode.
+        final LatLonPoint distanceOrigin = "around".equals(mode) ? location : null;
+        final int radius = intValue(values.get("radius"), 3000);
+        if ("around".equals(mode) && location == null) {
+            result.error("poi_search_invalid_argument", "周边查询必须提供中心坐标。", null);
+            return;
+        }
+        if ("around".equals(mode) && (radius < 1 || radius > 50000)) {
+            result.error("poi_search_invalid_argument", "查询半径必须在 1 到 50000 米之间。", null);
+            return;
+        }
+        String queryLanguage = stringOrNull(values.get("queryLanguage"));
+        if (queryLanguage == null) {
+            queryLanguage = PoiSearchV2.CHINESE;
+        }
+        if (queryLanguage != null
+                && !PoiSearchV2.CHINESE.equals(queryLanguage)
+                && !PoiSearchV2.ENGLISH.equals(queryLanguage)) {
+            result.error("poi_search_invalid_argument", "只支持 zh-CN 或 en。", null);
+            return;
+        }
+        try {
+            // The SDK's three-argument constructor requires a non-empty city.
+            // Use the two-argument form when the caller intentionally searches
+            // without a city restriction.
+            PoiSearchV2.Query query = city.isEmpty()
+                    ? new PoiSearchV2.Query(keyword, category)
+                    : new PoiSearchV2.Query(keyword, category, city);
+            query.setPageNum(page);
+            query.setPageSize(pageSize);
+            // Around requests have no city-limit equivalent on iOS; keep the
+            // shared API behavior consistent by applying it to keyword mode only.
+            query.setCityLimit("keyword".equals(mode) && cityLimit);
+            query.setDistanceSort(booleanValue(values.get("distanceSort"), true));
+            query.setBuilding(stringOrNull(values.get("building")));
+            query.setSpecial(booleanValue(values.get("special"), true));
+            query.setQueryLanguage(queryLanguage);
+            String channel = stringOrNull(values.get("channel"));
+            if (channel != null) {
+                query.setChannel(channel);
+            }
+            query.setPremium("entirety".equals(values.get("premium"))
+                    ? PoiSearchV2.PremiumType.ENTIRETY
+                    : PoiSearchV2.PremiumType.DEFAULT);
+            query.setShowFields(new PoiSearchV2.ShowFields(
+                    androidShowFieldsMask(showFields)));
+            query.setCustomParams(stringMap(values.get("customParams")));
+
+            final boolean includeIndoor = showFields < 0 || (showFields & (1 << 3)) != 0;
+            if (location != null) {
+                query.setLocation(location);
+            }
+
+            final PoiSearchV2 search = new PoiSearchV2(context, query);
+            if ("around".equals(mode)) {
+                search.setBound(new PoiSearchV2.SearchBound(
+                        location, radius, query.isDistanceSort()));
+            }
+
+            poiSearches.put(search, result);
+            search.setOnPoiSearchListener(new PoiSearchV2.OnPoiSearchListener() {
+                @Override
+                public void onPoiSearched(PoiResultV2 poiResult, int code) {
+                    MethodChannel.Result pendingResult = poiSearches.remove(search);
+                    search.setOnPoiSearchListener(null);
+                    if (pendingResult == null) {
+                        return;
+                    }
+                    if (code != AMapException.CODE_AMAP_SUCCESS || poiResult == null) {
+                        pendingResult.error("poi_search_failed",
+                                "POI 搜索失败 (" + code + ")。", code);
+                        return;
+                    }
+                    pendingResult.success(
+                            poiResultToMap(poiResult, includeIndoor, distanceOrigin));
+                }
+
+                @Override
+                public void onPoiItemSearched(PoiItemV2 ignored, int code) {
+                    // 当前通道只执行列表查询。
+                }
+
+                @Override
+                public void onVisualSearched(
+                        com.amap.api.services.poisearch.VisualSearchResult ignored, int code) {
+                    // 当前通道只执行列表查询。
+                }
+            });
+            try {
+                search.searchPOIAsyn();
+            } catch (IllegalArgumentException exception) {
+                poiSearches.remove(search);
+                search.setOnPoiSearchListener(null);
+                result.error("poi_search_invalid_argument", exception.getMessage(), null);
+            } catch (RuntimeException exception) {
+                poiSearches.remove(search);
+                search.setOnPoiSearchListener(null);
+                result.error("poi_search_failed", exception.getMessage(), null);
+            }
+        } catch (AMapException exception) {
+            result.error("poi_search_failed", exception.getErrorMessage(), exception.getErrorCode());
+        } catch (IllegalArgumentException exception) {
+            result.error("poi_search_invalid_argument", exception.getMessage(), null);
+        }
+    }
+
+    private static Map<String, Object> poiResultToMap(
+            PoiResultV2 poiResult, boolean includeIndoor, LatLonPoint distanceOrigin) {
+        Map<String, Object> map = new HashMap<>();
+        PoiSearchV2.Query query = poiResult.getQuery();
+        map.put("totalCount", poiResult.getCount());
+        map.put("page", query == null ? 1 : query.getPageNum());
+        map.put("pageSize", query == null ? 20 : query.getPageSize());
+        List<Map<String, Object>> pois = new ArrayList<>();
+        List<PoiItemV2> items = poiResult.getPois();
+        if (items != null) {
+            for (PoiItemV2 item : items) {
+                if (item != null && item.getLatLonPoint() != null) {
+                    pois.add(poiItemToMap(item, includeIndoor, distanceOrigin));
+                }
+            }
+        }
+        map.put("pois", pois);
+        return map;
+    }
+
+    private static Map<String, Object> poiItemToMap(
+            PoiItemV2 item, boolean includeIndoor, LatLonPoint distanceOrigin) {
+        Map<String, Object> map = new HashMap<>();
+        putIfNotNull(map, "id", item.getPoiId());
+        putIfNotNull(map, "name", item.getTitle());
+        String snippet = item.getSnippet();
+        putIfNotNull(map, "address", snippet);
+        putIfNotNull(map, "snippet", snippet);
+        putIfNotNull(map, "type", item.getTypeDes());
+        putIfNotNull(map, "typeCode", item.getTypeCode());
+        putIfNotNull(map, "adCode", item.getAdCode());
+        putIfNotNull(map, "city", item.getCityName());
+        putIfNotNull(map, "cityCode", item.getCityCode());
+        putIfNotNull(map, "province", item.getProvinceName());
+        putIfNotNull(map, "provinceCode", item.getProvinceCode());
+        putIfNotNull(map, "district", item.getAdName());
+        LatLonPoint poiLocation = item.getLatLonPoint();
+        putIfNotNull(map, "location", latLonPointToList(poiLocation));
+        if (distanceOrigin != null && poiLocation != null) {
+            // PoiItemV2 does not expose the search distance. Use the map SDK's
+            // own geometry utility so Dart does not reimplement the formula.
+            LatLng origin = new LatLng(
+                    distanceOrigin.getLatitude(), distanceOrigin.getLongitude());
+            LatLng target = new LatLng(
+                    poiLocation.getLatitude(), poiLocation.getLongitude());
+            map.put("distance", (double) AMapUtils.calculateLineDistance(origin, target));
+        }
+        Business business = item.getBusiness();
+        if (business != null) {
+            putIfNotNull(map, "businessArea", business.getBusinessArea());
+            putIfNotNull(map, "rating", business.getmRating());
+            putIfNotNull(map, "cost", business.getCost());
+            putIfNotNull(map, "parkingType", business.getParkingType());
+            putIfNotNull(map, "alias", business.getAlias());
+            putIfNotNull(map, "tel", business.getTel());
+        }
+
+        IndoorDataV2 indoor = item.getIndoorData();
+        if (includeIndoor) {
+            map.put("hasIndoorMap", indoor != null && indoor.isIndoorMap());
+        }
+
+        PoiNavi navi = item.getPoiNavi();
+        if (navi != null) {
+            putIfNotNull(map, "naviPoiId", navi.getNaviPoiID());
+            putIfNotNull(map, "gridCode", navi.getGridCode());
+            putIfNotNull(map, "enterLocation", latLonPointToList(navi.getEnter()));
+            putIfNotNull(map, "exitLocation", latLonPointToList(navi.getExit()));
+        }
+
+        List<Photo> photos = item.getPhotos();
+        List<Map<String, Object>> photoMaps = new ArrayList<>();
+        if (photos != null) {
+            for (Photo photo : photos) {
+                if (photo == null) {
+                    continue;
+                }
+                Map<String, Object> photoMap = new HashMap<>();
+                putIfNotNull(photoMap, "title", photo.getTitle());
+                putIfNotNull(photoMap, "url", photo.getUrl());
+                photoMaps.add(photoMap);
+            }
+        }
+        map.put("photos", photoMaps);
+
+        List<SubPoiItemV2> subPois = item.getSubPois();
+        List<Map<String, Object>> subPoiMaps = new ArrayList<>();
+        if (subPois != null) {
+            for (SubPoiItemV2 subPoi : subPois) {
+                if (subPoi == null) {
+                    continue;
+                }
+                Map<String, Object> subPoiMap = new HashMap<>();
+                putIfNotNull(subPoiMap, "id", subPoi.getPoiId());
+                putIfNotNull(subPoiMap, "name", subPoi.getTitle());
+                putIfNotNull(subPoiMap, "snippet", subPoi.getSnippet());
+                putIfNotNull(subPoiMap, "typeCode", subPoi.getTypeCode());
+                putIfNotNull(subPoiMap, "location", latLonPointToList(subPoi.getLatLonPoint()));
+                subPoiMaps.add(subPoiMap);
+            }
+        }
+        map.put("subPois", subPoiMaps);
+        return map;
+    }
+
+    /** Converts the Dart/iOS field mask to the zero-based PoiSearchV2 mask. */
+    private static int androidShowFieldsMask(int mask) {
+        if (mask < 0) {
+            return PoiSearchV2.ShowFields.ALL;
+        }
+        // Keep all five extension bits, including PHOTOS (Dart bit 5).
+        return (mask >> 1) & 0x1F;
+    }
+
+    private static LatLonPoint latLonPoint(Object value) {
+        if (!(value instanceof List) || ((List<?>) value).size() < 2) {
+            return null;
+        }
+        List<?> values = (List<?>) value;
+        if (!(values.get(0) instanceof Number) || !(values.get(1) instanceof Number)) {
+            return null;
+        }
+        return new LatLonPoint(
+                ((Number) values.get(0)).doubleValue(),
+                ((Number) values.get(1)).doubleValue());
+    }
+
+    private static List<Double> latLonPointToList(LatLonPoint point) {
+        if (point == null) {
+            return null;
+        }
+        List<Double> location = new ArrayList<>(2);
+        location.add(point.getLatitude());
+        location.add(point.getLongitude());
+        return location;
+    }
+
     private boolean hasLocationPermission(MethodChannel.Result result) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 && context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -429,6 +726,39 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         return call.arguments instanceof Map ? (Map<?, ?>) call.arguments : new HashMap<>();
     }
 
+    private static String stringValue(Object value, String fallback) {
+        return value instanceof String ? (String) value : fallback;
+    }
+
+    private static String stringOrNull(Object value) {
+        if (!(value instanceof String)) {
+            return null;
+        }
+        String string = ((String) value).trim();
+        return string.isEmpty() ? null : string;
+    }
+
+    private static int intValue(Object value, int fallback) {
+        return value instanceof Number ? ((Number) value).intValue() : fallback;
+    }
+
+    private static boolean booleanValue(Object value, boolean fallback) {
+        return value instanceof Boolean ? (Boolean) value : fallback;
+    }
+
+    private static Map<String, String> stringMap(Object value) {
+        Map<String, String> output = new HashMap<>();
+        if (!(value instanceof Map)) {
+            return output;
+        }
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+            if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+                output.put((String) entry.getKey(), (String) entry.getValue());
+            }
+        }
+        return output;
+    }
+
     private static long longValue(Object value, long fallback) {
         return value instanceof Number ? ((Number) value).longValue() : fallback;
     }
@@ -446,26 +776,46 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         if (singleResult != null) {
             finishSingle(null, "privacy_not_agreed", "用户已撤回高德隐私授权。");
         }
-        for (MethodChannel.Result result : new ArrayList<>(geocodeSearches.values())) {
-            result.error("privacy_not_agreed", "用户已撤回高德隐私授权。", null);
-        }
-        geocodeSearches.clear();
+        failPendingSearches("privacy_not_agreed", "用户已撤回高德隐私授权。");
     }
 
     void dispose() {
         stopContinuousLocation();
-        singleResult = null;
-        if (singleTimeout != null) {
-            handler.removeCallbacks(singleTimeout);
-            singleTimeout = null;
-        }
-        if (singleClient != null) {
-            singleClient.stopLocation();
-            singleClient.onDestroy();
-            singleClient = null;
+        finishSingle(null, "plugin_disposed", "高德服务控制器已销毁。");
+        failPendingSearches("plugin_disposed", "高德服务控制器已销毁。");
+        eventSink = null;
+    }
+
+    /** Completes pending native searches before the engine/channel is detached. */
+    private void failPendingSearches(String code, String message) {
+        List<Map.Entry<GeocodeSearch, MethodChannel.Result>> pendingGeocodes =
+                new ArrayList<>(geocodeSearches.entrySet());
+        List<Map.Entry<PoiSearchV2, MethodChannel.Result>> pendingPois =
+                new ArrayList<>(poiSearches.entrySet());
+
+        for (Map.Entry<GeocodeSearch, MethodChannel.Result> entry : pendingGeocodes) {
+            entry.getKey().setOnGeocodeSearchListener(null);
         }
         geocodeSearches.clear();
-        eventSink = null;
+        for (Map.Entry<PoiSearchV2, MethodChannel.Result> entry : pendingPois) {
+            entry.getKey().setOnPoiSearchListener(null);
+        }
+        poiSearches.clear();
+
+        if (!pendingGeocodes.isEmpty() || !pendingPois.isEmpty()) {
+            // GeocodeSearch and PoiSearchV2 expose no per-request cancellation
+            // API. On privacy revocation/dispose all plugin-owned service
+            // requests are invalidated, so tear down the SDK async executor
+            // after detaching listeners. The SDK recreates it for later calls.
+            ServiceSettings.getInstance().destroyInnerAsynThreadPool();
+        }
+
+        for (Map.Entry<GeocodeSearch, MethodChannel.Result> entry : pendingGeocodes) {
+            entry.getValue().error(code, message, null);
+        }
+        for (Map.Entry<PoiSearchV2, MethodChannel.Result> entry : pendingPois) {
+            entry.getValue().error(code, message, null);
+        }
     }
 
     @Override

@@ -25,6 +25,7 @@ public class AMapFlutterMapPlugin implements
     private AMapServicesController servicesController;
     private MethodChannel locationChannel;
     private MethodChannel geocodingChannel;
+    private MethodChannel poiSearchChannel;
     private EventChannel locationEventChannel;
 
     public AMapFlutterMapPlugin() {
@@ -39,9 +40,11 @@ public class AMapFlutterMapPlugin implements
         servicesController = new AMapServicesController(binding.getApplicationContext());
         locationChannel = new MethodChannel(binding.getBinaryMessenger(), "amap_map2/location");
         geocodingChannel = new MethodChannel(binding.getBinaryMessenger(), "amap_map2/geocoding");
+        poiSearchChannel = new MethodChannel(binding.getBinaryMessenger(), "amap_map2/poi_search");
         locationEventChannel = new EventChannel(binding.getBinaryMessenger(), "amap_map2/location_events");
         locationChannel.setMethodCallHandler(servicesController);
         geocodingChannel.setMethodCallHandler(servicesController);
+        poiSearchChannel.setMethodCallHandler(servicesController);
         locationEventChannel.setStreamHandler(servicesController);
         binding
                 .getPlatformViewRegistry()
@@ -57,11 +60,13 @@ public class AMapFlutterMapPlugin implements
         LogUtil.i(CLASS_NAME, "onDetachedFromEngine==>");
         locationChannel.setMethodCallHandler(null);
         geocodingChannel.setMethodCallHandler(null);
+        poiSearchChannel.setMethodCallHandler(null);
         locationEventChannel.setStreamHandler(null);
         servicesController.dispose();
         servicesController = null;
         locationChannel = null;
         geocodingChannel = null;
+        poiSearchChannel = null;
         locationEventChannel = null;
         pluginBinding = null;
     }

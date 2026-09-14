@@ -21,6 +21,7 @@
 - 运行时通过 `AMapController` 动态增删改覆盖物
 - 经纬度和屏幕坐标互转、截图、清理缓存
 - 独立单次/连续定位、正向和逆向地理编码
+- 关键字、周边 POI 搜索
 
 ## 安装
 
@@ -76,7 +77,10 @@ Widget build(BuildContext context) {
 
 定位和地理编码都可以脱离 `AMapWidget` 独立使用。调用前仍需执行上面的
 `AMapInitializer.init` 和 `AMapInitializer.updatePrivacyAgree`。隐私参数中的三个字段必须全部为
-`true`；用户撤回同意后，插件会停止正在运行的定位，并取消尚未完成的定位和地理编码请求。
+`true`；用户撤回同意后，插件会停止正在运行的定位，并取消尚未完成的定位、地理编码和 POI 请求；
+挂起的调用会收到 `privacy_not_agreed` 错误，不会收到成功结果。
+Android 的 `PoiSearchV2` 没有单请求取消接口，插件在隐私撤回或控制器销毁时会解绑挂起请求并销毁
+高德搜索异步线程池；后续新的异步搜索会由 SDK 自动重建线程池。
 
 定位由宿主应用申请系统权限，插件不会主动弹出权限请求。正向和逆向地理编码不需要系统定位权限。
 
@@ -161,6 +165,70 @@ AMapWidget(
 | `province` / `city` / `district` | 省、市、区县 |
 | `adCode` / `cityCode` / `townCode` | 行政区划、城市和乡镇编码 |
 
+### POI 搜索
+
+POI 搜索同样复用上面的初始化和隐私授权流程。`AMapPoiSearchClient` 提供关键字和坐标周边
+两种查询方式，返回 `AMapPoiSearchResult`；每个结果项为 `AMapPoiSearchItem`，坐标仍然是高德
+GCJ-02 坐标。
+
+关键字搜索（可选传入坐标，用于距离排序）：
+
+```dart
+final AMapPoiSearchResult result =
+    await AMapPoiSearchClient.instance.searchKeyword(
+  keyword: '咖啡店',
+  location: const LatLng(39.909187, 116.397451),
+  options: const AMapPoiSearchOptions(
+    city: '北京',
+    cityLimit: true,
+    page: 1,
+    pageSize: 20,
+    types: '050000',
+    showFields: <AMapPoiSearchField>{
+      AMapPoiSearchField.business,
+      AMapPoiSearchField.photos,
+    },
+  ),
+);
+
+for (final AMapPoiSearchItem poi in result.pois) {
+  debugPrint('${poi.name}: ${poi.location}');
+}
+```
+
+周边搜索：
+
+```dart
+final AMapPoiSearchResult nearby =
+    await AMapPoiSearchClient.instance.searchAround(
+  location: const LatLng(39.909187, 116.397451),
+  keyword: '加油站',
+  radius: 5000,
+);
+```
+
+`page` 范围为 `1..100`，`pageSize` 范围为 `1..25`，周边搜索的 `radius` 范围为 `1..50000` 米。
+`keyword` 和 `types` 至少提供一个；`types` 支持高德类型名称或类型编码，多个值用 `|` 分隔。
+关键字查询中 `cityLimit` 为 `true` 时必须同时提供 `city`；周边查询会忽略 `cityLimit`。`showFields` 可请求子 POI、商业、室内、
+导航和图片等扩展数据；没有请求或 SDK 没有返回时，对应模型字段为空。
+
+两端都会把 `showFields` 按同一套 Dart 语义处理（子 POI、商业、室内、导航、图片和全部扩展）。
+Android 使用高德 `PoiSearchV2`；iOS 两种查询都使用无后缀 POI 2.0 接口。`queryLanguage` 默认是
+`zh-CN`，Android 还支持 `en`，iOS 会忽略该参数并使用 SDK 当前语言；`channel` 和 `premium` 是
+Android 专属选项，在 iOS 上会忽略。iOS 无后缀接口不提供 `building` 和 `special`，这两个参数在 iOS
+上会忽略，`customParams` 在两端均可使用。
+
+`AMapPoiSearchItem` 的可选返回字段以各平台 SDK 实际提供的数据为准，不要假设所有字段在两端都存在。
+Android `PoiItemV2` 没有 `website`、`email`、`postcode` 的公开字段，因此这些字段在 Android 通常为
+`null`；iOS `AMapPOI` 可以提供它们。`tel`、`businessArea`、`rating`、`cost`、`parkingType` 和
+`alias` 属于商业扩展数据，是否返回还取决于 `showFields` 和高德数据完整性。未请求或原生没有返回的
+字段统一为 `null`，`photos` 和 `subPois` 没有数据时为空列表。
+
+结果中的 `address` 和 `snippet` 使用统一语义；周边查询的 `distance` 由原生地图 SDK 在本地
+计算，单位为米（Android 使用 `AMapUtils.calculateLineDistance`，iOS 使用
+`MAMetersBetweenMapPoints`）。这是 POI 中心点到结果点的直线距离，不是驾车或步行路线距离；关键字
+查询的 `distance` 为 `null`。
+
 定位和地理编码接口只暴露高德坐标语义，面向中国境内 GCJ-02 场景，不提供坐标系切换。传给地图、定位和
 `reverseGeocode` 的坐标应保持同一坐标系。
 
@@ -173,6 +241,8 @@ AMapWidget(
 | `location_service_disabled` | 系统定位服务未开启 |
 | `location_busy` / `location_timeout` / `location_failed` | 单次定位冲突、超时或 SDK 定位失败 |
 | `geocode_failed` / `reverse_geocode_failed` | 正向或逆向地理编码请求失败 |
+| `poi_search_failed` / `poi_search_invalid_argument` | POI 搜索失败或原生参数无效 |
+| `plugin_disposed` | Flutter 引擎销毁时仍有请求未完成 |
 
 ## 基础地图
 
