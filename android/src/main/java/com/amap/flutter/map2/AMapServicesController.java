@@ -38,6 +38,7 @@ import com.amap.api.services.poisearch.PoiResultV2;
 import com.amap.api.services.poisearch.PoiSearchV2;
 import com.amap.api.services.poisearch.SubPoiItemV2;
 import com.amap.flutter.map2.utils.ConvertUtil;
+import com.amap.flutter.map2.utils.LogUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +57,10 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         EventChannel.StreamHandler {
     private final Context context;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private EventChannel.EventSink eventSink;
+    private volatile EventChannel.EventSink eventSink;
+    private volatile boolean disposed;
+    private final Object singleOperationLock = new Object();
+    private final Object searchOperationLock = new Object();
     // 单次和连续定位使用不同实例，避免单次请求中断正在运行的连续定位。
     private AMapLocationClient continuousClient;
     private AMapLocationClient singleClient;
@@ -75,6 +79,10 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
+        if (disposed) {
+            result.error("services_disposed", "高德服务控制器已销毁。", null);
+            return;
+        }
         switch (call.method) {
             case "services#initialize":
                 initialize(call.arguments, result);
@@ -158,18 +166,32 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         if (!hasLocationPermission(result)) {
             return;
         }
-        if (singleResult != null) {
-            result.error("location_busy", "已有单次定位请求正在执行。", null);
-            return;
+        synchronized (singleOperationLock) {
+            if (disposed) {
+                result.error("services_disposed", "高德服务控制器已销毁。", null);
+                return;
+            }
+            if (singleResult != null) {
+                result.error("location_busy", "已有单次定位请求正在执行。", null);
+                return;
+            }
+            singleResult = result;
         }
         try {
-            singleResult = result;
-            singleClient = new AMapLocationClient(context);
-            singleClient.setLocationOption(locationOptions(options, true));
-            singleClient.setLocationListener(location -> {
-                if (singleResult == null) {
-                    return;
+            final AMapLocationClient client = new AMapLocationClient(context);
+            boolean clientStillActive;
+            synchronized (singleOperationLock) {
+                clientStillActive = !disposed && singleResult != null;
+                if (clientStillActive) {
+                    singleClient = client;
                 }
+            }
+            if (!clientStillActive) {
+                destroyLocationClient(client, "single location");
+                return;
+            }
+            client.setLocationOption(locationOptions(options, true));
+            client.setLocationListener(location -> handler.post(() -> {
                 if (location != null && location.getErrorCode() == AMapLocation.LOCATION_SUCCESS) {
                     finishSingle(location, null, null);
                 } else {
@@ -177,11 +199,21 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
                             : location.getErrorInfo() + " (" + location.getErrorCode() + ")";
                     finishSingle(null, "location_failed", message);
                 }
-            });
+            }));
             long timeout = longValue(options.get("timeout"), 10000L);
-            singleTimeout = () -> finishSingle(null, "location_timeout", "定位超时。");
-            handler.postDelayed(singleTimeout, timeout);
-            singleClient.startLocation();
+            Runnable timeoutTask = () -> finishSingle(null, "location_timeout", "定位超时。");
+            synchronized (singleOperationLock) {
+                clientStillActive = !disposed && singleClient == client && singleResult != null;
+                if (clientStillActive) {
+                    singleTimeout = timeoutTask;
+                }
+            }
+            if (!clientStillActive) {
+                destroyLocationClient(client, "single location");
+                return;
+            }
+            handler.postDelayed(timeoutTask, timeout);
+            client.startLocation();
         } catch (Exception exception) {
             finishSingle(null, "location_failed", exception.getMessage());
         }
@@ -191,30 +223,51 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         if (!hasLocationPermission(result)) {
             return;
         }
+        if (disposed) {
+            result.error("services_disposed", "高德服务控制器已销毁。", null);
+            return;
+        }
         stopContinuousLocation();
         try {
-            continuousClient = new AMapLocationClient(context);
-            continuousClient.setLocationOption(locationOptions(options, false));
-            continuousClient.setLocationListener(new AMapLocationListener() {
+            final AMapLocationClient client = new AMapLocationClient(context);
+            boolean clientStillActive;
+            synchronized (singleOperationLock) {
+                clientStillActive = !disposed;
+                if (clientStillActive) {
+                    continuousClient = client;
+                }
+            }
+            if (!clientStillActive) {
+                destroyLocationClient(client, "continuous location");
+                result.error("services_disposed", "高德服务控制器已销毁。", null);
+                return;
+            }
+            client.setLocationOption(locationOptions(options, false));
+            client.setLocationListener(new AMapLocationListener() {
                 @Override
                 public void onLocationChanged(AMapLocation location) {
-                    if (eventSink == null) {
-                        return;
-                    }
-                    if (location != null && location.getErrorCode() == AMapLocation.LOCATION_SUCCESS) {
-                        eventSink.success(locationToMap(location));
-                    } else {
-                        String message = location == null ? "定位 SDK 未返回位置。"
-                                : location.getErrorInfo() + " (" + location.getErrorCode() + ")";
-                        eventSink.error("location_failed", message, null);
-                    }
+                    handler.post(() -> emitLocation(location));
                 }
             });
-            continuousClient.startLocation();
+            client.startLocation();
             result.success(null);
         } catch (Exception exception) {
             stopContinuousLocation();
             result.error("location_failed", exception.getMessage(), null);
+        }
+    }
+
+    private void emitLocation(AMapLocation location) {
+        EventChannel.EventSink sink = eventSink;
+        if (disposed || sink == null) {
+            return;
+        }
+        if (location != null && location.getErrorCode() == AMapLocation.LOCATION_SUCCESS) {
+            sink.success(locationToMap(location));
+        } else {
+            String message = location == null ? "定位 SDK 未返回位置。"
+                    : location.getErrorInfo() + " (" + location.getErrorCode() + ")";
+            sink.error("location_failed", message, null);
         }
     }
 
@@ -243,10 +296,18 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
             result.error("geocode_invalid_argument", "地址不能为空。", null);
             return;
         }
+        GeocodeSearch search = null;
         try {
-            GeocodeSearch search = new GeocodeSearch(context);
-            geocodeSearches.put(search, result);
-            search.setOnGeocodeSearchListener(new GeocodeSearch.OnGeocodeSearchListener() {
+            search = new GeocodeSearch(context);
+            final GeocodeSearch activeSearch = search;
+            synchronized (searchOperationLock) {
+                if (disposed) {
+                    result.error("services_disposed", "高德服务控制器已销毁。", null);
+                    return;
+                }
+                geocodeSearches.put(search, result);
+            }
+            activeSearch.setOnGeocodeSearchListener(new GeocodeSearch.OnGeocodeSearchListener() {
                 @Override
                 public void onRegeocodeSearched(RegeocodeResult ignored, int code) {
                     // 当前搜索实例只处理正向地理编码。
@@ -254,28 +315,52 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
 
                 @Override
                 public void onGeocodeSearched(GeocodeResult geocodeResult, int code) {
-                    MethodChannel.Result pendingResult = geocodeSearches.remove(search);
-                    if (pendingResult == null) {
-                        return;
-                    }
-                    if (code != AMapException.CODE_AMAP_SUCCESS || geocodeResult == null) {
-                        pendingResult.error("geocode_failed", "地理编码失败 (" + code + ")。", code);
-                        return;
-                    }
-                    List<Map<String, Object>> output = new ArrayList<>();
-                    List<GeocodeAddress> addresses = geocodeResult.getGeocodeAddressList();
-                    if (addresses != null) {
-                        for (GeocodeAddress address : addresses) {
-                            output.add(geocodeToMap(address));
+                    handler.post(() -> {
+                        // Claim the request on the main thread.  Disposal also
+                        // runs here, so it can win the race and complete the
+                        // Result exactly once before this callback is handled.
+                        MethodChannel.Result pendingResult = takeGeocodeResult(activeSearch);
+                        if (pendingResult == null) {
+                            return;
                         }
-                    }
-                    pendingResult.success(output);
+                        detachGeocodeListener(activeSearch);
+                        try {
+                            if (disposed) {
+                                pendingResult.error("services_disposed", "高德服务控制器已销毁。", null);
+                                return;
+                            }
+                            if (code != AMapException.CODE_AMAP_SUCCESS || geocodeResult == null) {
+                                pendingResult.error("geocode_failed", "地理编码失败 (" + code + ")。", code);
+                                return;
+                            }
+                            List<Map<String, Object>> output = new ArrayList<>();
+                            List<GeocodeAddress> addresses = geocodeResult.getGeocodeAddressList();
+                            if (addresses != null) {
+                                for (GeocodeAddress address : addresses) {
+                                    if (address != null) {
+                                        output.add(geocodeToMap(address));
+                                    }
+                                }
+                            }
+                            pendingResult.success(output);
+                        } catch (Throwable error) {
+                            pendingResult.error("geocode_failed", "地理编码结果处理失败。", error.getMessage());
+                        }
+                    });
                 }
             });
             String city = values.get("city") instanceof String ? (String) values.get("city") : "";
-            search.getFromLocationNameAsyn(new GeocodeQuery(((String) addressValue).trim(), city));
+            activeSearch.getFromLocationNameAsyn(new GeocodeQuery(((String) addressValue).trim(), city));
         } catch (AMapException exception) {
+            if (search != null) {
+                removeGeocodeResultAndDetach(search);
+            }
             result.error("geocode_failed", exception.getErrorMessage(), exception.getErrorCode());
+        } catch (RuntimeException exception) {
+            if (search != null) {
+                removeGeocodeResultAndDetach(search);
+            }
+            result.error("geocode_failed", exception.getMessage(), null);
         }
     }
 
@@ -292,24 +377,43 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         double longitude = ((Number) location.get(1)).doubleValue();
         float radius = values.get("radius") instanceof Number
                 ? ((Number) values.get("radius")).floatValue() : 1000F;
+        GeocodeSearch search = null;
         try {
-            GeocodeSearch search = new GeocodeSearch(context);
-            geocodeSearches.put(search, result);
-            search.setOnGeocodeSearchListener(new GeocodeSearch.OnGeocodeSearchListener() {
+            search = new GeocodeSearch(context);
+            final GeocodeSearch activeSearch = search;
+            synchronized (searchOperationLock) {
+                if (disposed) {
+                    result.error("services_disposed", "高德服务控制器已销毁。", null);
+                    return;
+                }
+                geocodeSearches.put(search, result);
+            }
+            activeSearch.setOnGeocodeSearchListener(new GeocodeSearch.OnGeocodeSearchListener() {
                 @Override
                 public void onRegeocodeSearched(RegeocodeResult regeocodeResult, int code) {
-                    MethodChannel.Result pendingResult = geocodeSearches.remove(search);
-                    if (pendingResult == null) {
-                        return;
-                    }
-                    RegeocodeAddress address = regeocodeResult == null
-                            ? null : regeocodeResult.getRegeocodeAddress();
-                    if (code != AMapException.CODE_AMAP_SUCCESS || address == null) {
-                        pendingResult.error("reverse_geocode_failed",
-                                "逆地理编码失败 (" + code + ")。", code);
-                        return;
-                    }
-                    pendingResult.success(reverseGeocodeToMap(address, latitude, longitude));
+                    handler.post(() -> {
+                        MethodChannel.Result pendingResult = takeGeocodeResult(activeSearch);
+                        if (pendingResult == null) {
+                            return;
+                        }
+                        detachGeocodeListener(activeSearch);
+                        try {
+                            if (disposed) {
+                                pendingResult.error("services_disposed", "高德服务控制器已销毁。", null);
+                                return;
+                            }
+                            RegeocodeAddress address = regeocodeResult == null
+                                    ? null : regeocodeResult.getRegeocodeAddress();
+                            if (code != AMapException.CODE_AMAP_SUCCESS || address == null) {
+                                pendingResult.error("reverse_geocode_failed",
+                                        "逆地理编码失败 (" + code + ")。", code);
+                                return;
+                            }
+                            pendingResult.success(reverseGeocodeToMap(address, latitude, longitude));
+                        } catch (Throwable error) {
+                            pendingResult.error("reverse_geocode_failed", "逆地理编码结果处理失败。", error.getMessage());
+                        }
+                    });
                 }
 
                 @Override
@@ -319,14 +423,26 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
             });
             RegeocodeQuery query = new RegeocodeQuery(
                     new LatLonPoint(latitude, longitude), radius, GeocodeSearch.AMAP);
-            search.getFromLocationAsyn(query);
+            activeSearch.getFromLocationAsyn(query);
         } catch (AMapException exception) {
+            if (search != null) {
+                removeGeocodeResultAndDetach(search);
+            }
             result.error("reverse_geocode_failed",
                     exception.getErrorMessage(), exception.getErrorCode());
+        } catch (RuntimeException exception) {
+            if (search != null) {
+                removeGeocodeResultAndDetach(search);
+            }
+            result.error("reverse_geocode_failed", exception.getMessage(), null);
         }
     }
 
     private void poiSearch(Map<?, ?> values, MethodChannel.Result result) {
+        if (disposed) {
+            result.error("services_disposed", "高德服务控制器已销毁。", null);
+            return;
+        }
         String mode = stringValue(values.get("mode"), "keyword");
         String keyword = stringValue(values.get("keyword"), "").trim();
         String category = stringOrNull(values.get("types"));
@@ -423,22 +539,38 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
                         location, radius, query.isDistanceSort()));
             }
 
-            poiSearches.put(search, result);
+            synchronized (searchOperationLock) {
+                if (disposed) {
+                    result.error("services_disposed", "高德服务控制器已销毁。", null);
+                    return;
+                }
+                poiSearches.put(search, result);
+            }
             search.setOnPoiSearchListener(new PoiSearchV2.OnPoiSearchListener() {
                 @Override
                 public void onPoiSearched(PoiResultV2 poiResult, int code) {
-                    MethodChannel.Result pendingResult = poiSearches.remove(search);
-                    search.setOnPoiSearchListener(null);
-                    if (pendingResult == null) {
-                        return;
-                    }
-                    if (code != AMapException.CODE_AMAP_SUCCESS || poiResult == null) {
-                        pendingResult.error("poi_search_failed",
-                                "POI 搜索失败 (" + code + ")。", code);
-                        return;
-                    }
-                    pendingResult.success(
-                            poiResultToMap(poiResult, includeIndoor, distanceOrigin));
+                    handler.post(() -> {
+                        MethodChannel.Result pendingResult = takePoiResult(search);
+                        if (pendingResult == null) {
+                            return;
+                        }
+                        detachPoiListener(search);
+                        try {
+                            if (disposed) {
+                                pendingResult.error("services_disposed", "高德服务控制器已销毁。", null);
+                                return;
+                            }
+                            if (code != AMapException.CODE_AMAP_SUCCESS || poiResult == null) {
+                                pendingResult.error("poi_search_failed",
+                                        "POI 搜索失败 (" + code + ")。", code);
+                                return;
+                            }
+                            pendingResult.success(
+                                    poiResultToMap(poiResult, includeIndoor, distanceOrigin));
+                        } catch (Throwable error) {
+                            pendingResult.error("poi_search_failed", "POI 搜索结果处理失败。", error.getMessage());
+                        }
+                    });
                 }
 
                 @Override
@@ -455,18 +587,18 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
             try {
                 search.searchPOIAsyn();
             } catch (IllegalArgumentException exception) {
-                poiSearches.remove(search);
-                search.setOnPoiSearchListener(null);
+                removePoiResultAndDetach(search);
                 result.error("poi_search_invalid_argument", exception.getMessage(), null);
             } catch (RuntimeException exception) {
-                poiSearches.remove(search);
-                search.setOnPoiSearchListener(null);
+                removePoiResultAndDetach(search);
                 result.error("poi_search_failed", exception.getMessage(), null);
             }
         } catch (AMapException exception) {
             result.error("poi_search_failed", exception.getErrorMessage(), exception.getErrorCode());
         } catch (IllegalArgumentException exception) {
             result.error("poi_search_invalid_argument", exception.getMessage(), null);
+        } catch (RuntimeException exception) {
+            result.error("poi_search_failed", exception.getMessage(), null);
         }
     }
 
@@ -628,16 +760,22 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
 
     private void finishSingle(AMapLocation location, String code, String message) {
         // 回调和超时都汇聚到这里，先清空状态以保证 Flutter Result 只完成一次。
-        MethodChannel.Result result = singleResult;
-        singleResult = null;
-        if (singleTimeout != null) {
-            handler.removeCallbacks(singleTimeout);
+        MethodChannel.Result result;
+        Runnable timeout;
+        AMapLocationClient client;
+        synchronized (singleOperationLock) {
+            result = singleResult;
+            singleResult = null;
+            timeout = singleTimeout;
             singleTimeout = null;
-        }
-        if (singleClient != null) {
-            singleClient.stopLocation();
-            singleClient.onDestroy();
+            client = singleClient;
             singleClient = null;
+        }
+        if (timeout != null) {
+            handler.removeCallbacks(timeout);
+        }
+        if (client != null) {
+            destroyLocationClient(client, "single location");
         }
         if (result == null) {
             return;
@@ -764,22 +902,37 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
     }
 
     private void stopContinuousLocation() {
-        if (continuousClient != null) {
-            continuousClient.stopLocation();
-            continuousClient.onDestroy();
+        AMapLocationClient client;
+        synchronized (singleOperationLock) {
+            client = continuousClient;
             continuousClient = null;
+        }
+        if (client != null) {
+            destroyLocationClient(client, "continuous location");
+        }
+    }
+
+    private void destroyLocationClient(AMapLocationClient client, String operation) {
+        try {
+            client.stopLocation();
+        } catch (Throwable error) {
+            LogUtil.e("AMapServicesController", "stop " + operation, error);
+        }
+        try {
+            client.onDestroy();
+        } catch (Throwable error) {
+            LogUtil.e("AMapServicesController", "destroy " + operation, error);
         }
     }
 
     private void cancelActiveOperations() {
         stopContinuousLocation();
-        if (singleResult != null) {
-            finishSingle(null, "privacy_not_agreed", "用户已撤回高德隐私授权。");
-        }
+        finishSingle(null, "privacy_not_agreed", "用户已撤回高德隐私授权。");
         failPendingSearches("privacy_not_agreed", "用户已撤回高德隐私授权。");
     }
 
     void dispose() {
+        disposed = true;
         stopContinuousLocation();
         finishSingle(null, "plugin_disposed", "高德服务控制器已销毁。");
         failPendingSearches("plugin_disposed", "高德服务控制器已销毁。");
@@ -788,26 +941,40 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
 
     /** Completes pending native searches before the engine/channel is detached. */
     private void failPendingSearches(String code, String message) {
-        List<Map.Entry<GeocodeSearch, MethodChannel.Result>> pendingGeocodes =
-                new ArrayList<>(geocodeSearches.entrySet());
-        List<Map.Entry<PoiSearchV2, MethodChannel.Result>> pendingPois =
-                new ArrayList<>(poiSearches.entrySet());
+        List<Map.Entry<GeocodeSearch, MethodChannel.Result>> pendingGeocodes;
+        List<Map.Entry<PoiSearchV2, MethodChannel.Result>> pendingPois;
+        synchronized (searchOperationLock) {
+            pendingGeocodes = new ArrayList<>(geocodeSearches.entrySet());
+            pendingPois = new ArrayList<>(poiSearches.entrySet());
+            geocodeSearches.clear();
+            poiSearches.clear();
+        }
 
         for (Map.Entry<GeocodeSearch, MethodChannel.Result> entry : pendingGeocodes) {
-            entry.getKey().setOnGeocodeSearchListener(null);
+            try {
+                entry.getKey().setOnGeocodeSearchListener(null);
+            } catch (Throwable error) {
+                LogUtil.e("AMapServicesController", "detach geocode listener", error);
+            }
         }
-        geocodeSearches.clear();
         for (Map.Entry<PoiSearchV2, MethodChannel.Result> entry : pendingPois) {
-            entry.getKey().setOnPoiSearchListener(null);
+            try {
+                entry.getKey().setOnPoiSearchListener(null);
+            } catch (Throwable error) {
+                LogUtil.e("AMapServicesController", "detach POI listener", error);
+            }
         }
-        poiSearches.clear();
 
         if (!pendingGeocodes.isEmpty() || !pendingPois.isEmpty()) {
             // GeocodeSearch and PoiSearchV2 expose no per-request cancellation
             // API. On privacy revocation/dispose all plugin-owned service
             // requests are invalidated, so tear down the SDK async executor
             // after detaching listeners. The SDK recreates it for later calls.
-            ServiceSettings.getInstance().destroyInnerAsynThreadPool();
+            try {
+                ServiceSettings.getInstance().destroyInnerAsynThreadPool();
+            } catch (Throwable error) {
+                LogUtil.e("AMapServicesController", "destroy search executor", error);
+            }
         }
 
         for (Map.Entry<GeocodeSearch, MethodChannel.Result> entry : pendingGeocodes) {
@@ -815,6 +982,48 @@ final class AMapServicesController implements MethodChannel.MethodCallHandler,
         }
         for (Map.Entry<PoiSearchV2, MethodChannel.Result> entry : pendingPois) {
             entry.getValue().error(code, message, null);
+        }
+    }
+
+    private MethodChannel.Result takeGeocodeResult(GeocodeSearch search) {
+        synchronized (searchOperationLock) {
+            return geocodeSearches.remove(search);
+        }
+    }
+
+    private void removeGeocodeResultAndDetach(GeocodeSearch search) {
+        synchronized (searchOperationLock) {
+            geocodeSearches.remove(search);
+        }
+        detachGeocodeListener(search);
+    }
+
+    private void detachGeocodeListener(GeocodeSearch search) {
+        try {
+            search.setOnGeocodeSearchListener(null);
+        } catch (Throwable error) {
+            LogUtil.e("AMapServicesController", "detach geocode listener", error);
+        }
+    }
+
+    private MethodChannel.Result takePoiResult(PoiSearchV2 search) {
+        synchronized (searchOperationLock) {
+            return poiSearches.remove(search);
+        }
+    }
+
+    private void removePoiResultAndDetach(PoiSearchV2 search) {
+        synchronized (searchOperationLock) {
+            poiSearches.remove(search);
+        }
+        detachPoiListener(search);
+    }
+
+    private void detachPoiListener(PoiSearchV2 search) {
+        try {
+            search.setOnPoiSearchListener(null);
+        } catch (Throwable error) {
+            LogUtil.e("AMapServicesController", "detach POI listener", error);
         }
     }
 

@@ -177,6 +177,7 @@ class MapState extends State<AMapWidget> {
 
   final Completer<AMapController> _controller = Completer<AMapController>();
   late AMapOptions _mapOptions;
+  bool _disposed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -212,11 +213,14 @@ class MapState extends State<AMapWidget> {
   }
 
   @override
-  void dispose() async {
+  void dispose() {
+    _disposed = true;
+    if (_controller.isCompleted) {
+      _controller.future.then((AMapController controller) {
+        controller.dispose();
+      });
+    }
     super.dispose();
-    AMapController controller = await _controller.future;
-    controller.dispose();
-    print('dispose AMapWidget with mapId: ${controller.mapId}');
   }
 
   @override
@@ -244,11 +248,18 @@ class MapState extends State<AMapWidget> {
   }
 
   Future<void> onPlatformViewCreated(int id) async {
+    if (_disposed) {
+      return;
+    }
     final AMapController controller = await AMapController.init(
       id,
       widget.initialCameraPosition,
       this,
     );
+    if (_disposed) {
+      controller.dispose();
+      return;
+    }
     _controller.complete(controller);
 
     final MapCreatedCallback? onMapCreated = widget.onMapCreated;
@@ -322,19 +333,31 @@ class MapState extends State<AMapWidget> {
   }
 
   void _updateOptions() async {
+    if (_disposed) {
+      return;
+    }
     final AMapOptions newOptions = AMapOptions.fromWidget(widget);
     final Map<String, dynamic> updates = _mapOptions._updatesMap(newOptions);
     if (updates.isEmpty) {
       return;
     }
     final AMapController controller = await _controller.future;
+    if (_disposed || !mounted) {
+      return;
+    }
     // ignore: unawaited_futures
     controller._updateMapOptions(updates);
     _mapOptions = newOptions;
   }
 
   void updateMarkers() async {
+    if (_disposed) {
+      return;
+    }
     final AMapController controller = await _controller.future;
+    if (_disposed || !mounted) {
+      return;
+    }
     MarkerUpdates markerUpdates =
         MarkerUpdates.from(_markers.values.toSet(), widget.markers);
 
@@ -354,21 +377,33 @@ class MapState extends State<AMapWidget> {
   }
 
   void _updatePolylines() async {
+    if (_disposed) {
+      return;
+    }
     final AMapController controller = await _controller.future;
+    if (_disposed || !mounted) {
+      return;
+    }
     controller._updatePolylines(
         PolylineUpdates.from(_polylines.values.toSet(), widget.polylines));
     _polylines = keyByPolylineId(widget.polylines);
   }
 
   void _updatePolygons() async {
+    if (_disposed) {
+      return;
+    }
     final AMapController controller = await _controller.future;
+    if (_disposed || !mounted) {
+      return;
+    }
     controller._updatePolygons(
         PolygonUpdates.from(_polygons.values.toSet(), widget.polygons));
     _polygons = keyByPolygonId(widget.polygons);
   }
 
   void _onInfoWindowUpdate(Marker marker) {
-    if (widget.infoWindowAdapter != null) {
+    if (!_disposed && mounted && widget.infoWindowAdapter != null) {
       setState(() {
         _infoWindows[marker.id] =
             widget.infoWindowAdapter!.getInfoWindow(context, marker);
@@ -377,6 +412,9 @@ class MapState extends State<AMapWidget> {
   }
 
   void _removeInfoWindow(String markerId) {
+    if (_disposed || !mounted) {
+      return;
+    }
     setState(() {
       _infoWindows.remove(markerId);
     });

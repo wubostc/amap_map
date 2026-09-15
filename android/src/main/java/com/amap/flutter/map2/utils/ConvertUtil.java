@@ -113,7 +113,7 @@ public class ConvertUtil {
 
     public static int toLocalMapType(int dartMapIndex) {
         int[] localTypeArray = {AMap.MAP_TYPE_NORMAL, AMap.MAP_TYPE_SATELLITE, AMap.MAP_TYPE_NIGHT, AMap.MAP_TYPE_NAVI, AMap.MAP_TYPE_BUS};
-        if (dartMapIndex > localTypeArray.length) {
+        if (dartMapIndex < 0 || dartMapIndex >= localTypeArray.length) {
             return localTypeArray[0];
         }
         return localTypeArray[dartMapIndex];
@@ -160,7 +160,10 @@ public class ConvertUtil {
     public static Point pointFromMap(Object o) {
         Object x = toMap(o).get("x");
         Object y = toMap(o).get("y");
-        return new Point((int) x, (int) y);
+        if (!(x instanceof Number) || !(y instanceof Number)) {
+            throw new IllegalArgumentException("Screen coordinate must contain numeric x and y");
+        }
+        return new Point(((Number) x).intValue(), ((Number) y).intValue());
     }
 
     public static float toFloatPixels(Object o) {
@@ -379,8 +382,8 @@ public class ConvertUtil {
             return null;
         }
 
-        if (location.getAltitude() > 90 ||
-                location.getAltitude() < -90 ||
+        if (location.getLatitude() > 90 ||
+                location.getLatitude() < -90 ||
                 location.getLongitude() > 180 ||
                 location.getLongitude() < -180) {
             return null;
@@ -534,8 +537,14 @@ public class ConvertUtil {
     }
 
     public static LatLng toLatLng(Object o) {
-        final List<?> data = (List<?>) o;
-        return new LatLng((Double) data.get(0), (Double) data.get(1));
+        final List<?> data = toList(o);
+        if (data.size() < 2 || !(data.get(0) instanceof Number)
+                || !(data.get(1) instanceof Number)) {
+            throw new IllegalArgumentException("LatLng must contain numeric latitude and longitude");
+        }
+        return new LatLng(
+                ((Number) data.get(0)).doubleValue(),
+                ((Number) data.get(1)).doubleValue());
     }
 
     public static List<LatLng> toPoints(Object o) {

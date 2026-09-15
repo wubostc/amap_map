@@ -14,6 +14,7 @@ import com.amap.flutter.map2.utils.ConvertUtil;
 import com.amap.flutter.map2.utils.LogUtil;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +33,7 @@ public class PolylinesController
         AMap.OnPolylineClickListener {
 
     private static final String CLASS_NAME = "PolylinesController";
+    private boolean disposed;
 
     public PolylinesController(MethodChannel methodChannel, AMap amap) {
         super(methodChannel, amap);
@@ -41,6 +43,20 @@ public class PolylinesController
     @Override
     public String[] getRegisterMethodIdArray() {
         return Const.METHOD_ID_LIST_FOR_POLYLINE;
+    }
+
+    /** Detaches the SDK listener and removes polyline objects before map destruction. */
+    public void dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        amap.removeOnPolylineClickListener(this);
+        for (PolylineController controller : new ArrayList<>(controllerMapByDartId.values())) {
+            controller.remove();
+        }
+        controllerMapByDartId.clear();
+        idMapByOverlyId.clear();
     }
 
     @Override
@@ -56,6 +72,9 @@ public class PolylinesController
 
     @Override
     public void onPolylineClick(Polyline polyline) {
+        if (disposed) {
+            return;
+        }
         String dartId = idMapByOverlyId.get(polyline.getId());
         if (null == dartId) {
             return;

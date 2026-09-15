@@ -28,7 +28,9 @@ import com.amap.flutter.map2.utils.LogUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -58,6 +60,9 @@ public class MapController
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Object regionSnapshotLock = new Object();
     private boolean regionSnapshotInProgress = false;
+    private RegionSnapshotSession regionSnapshotSession;
+    private final Map<AtomicBoolean, MethodChannel.Result> pendingScreenShots = new HashMap<>();
+    private final AtomicBoolean disposed = new AtomicBoolean(false);
 
     public MapController(MethodChannel methodChannel, TextureMapView mapView) {
         this.methodChannel = methodChannel;
@@ -80,8 +85,13 @@ public class MapController
     @Override
     public void doMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         LogUtil.i(CLASS_NAME, "doMethodCall===>" + call.method);
+        if (disposed.get()) {
+            result.error("map_disposed", "地图视图已销毁。", null);
+            return;
+        }
         if (null == amap) {
             LogUtil.w(CLASS_NAME, "onMethodCall amap is null!!!");
+            result.error("map_unavailable", "地图对象不可用。", null);
             return;
         }
         switch (call.method) {
@@ -116,21 +126,59 @@ public class MapController
                 break;
             case Const.METHOD_MAP_TAKE_SNAPSHOT:
                 final MethodChannel.Result _result = result;
-                amap.getMapScreenShot(new AMap.OnMapScreenShotListener() {
-                    @Override
-                    public void onMapScreenShot(Bitmap bitmap) {
-                        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-                        byte[] byteArray = stream.toByteArray();
-                        bitmap.recycle();
-                        _result.success(byteArray);
-                    }
+                final AtomicBoolean snapshotCompleted = new AtomicBoolean(false);
+                synchronized (regionSnapshotLock) {
+                    pendingScreenShots.put(snapshotCompleted, _result);
+                }
+                try {
+                    amap.getMapScreenShot(new AMap.OnMapScreenShotListener() {
+                        @Override
+                        public void onMapScreenShot(Bitmap bitmap) {
+                            if (!snapshotCompleted.compareAndSet(false, true)) {
+                                return;
+                            }
+                            synchronized (regionSnapshotLock) {
+                                pendingScreenShots.remove(snapshotCompleted);
+                            }
+                            try {
+                                if (disposed.get()) {
+                                    _result.error("map_disposed", "地图视图已销毁。", null);
+                                    return;
+                                }
+                                if (bitmap == null || bitmap.isRecycled()) {
+                                    _result.error("snapshot_failed", "地图 SDK 未返回有效截图。", null);
+                                    return;
+                                }
+                                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                                    _result.error("snapshot_failed", "截图 PNG 编码失败。", null);
+                                    return;
+                                }
+                                _result.success(stream.toByteArray());
+                            } catch (Throwable error) {
+                                LogUtil.e(CLASS_NAME, "takeSnapshot", error);
+                                _result.error("snapshot_failed", "截图处理失败。", error.getMessage());
+                            } finally {
+                                if (bitmap != null && !bitmap.isRecycled()) {
+                                    bitmap.recycle();
+                                }
+                            }
+                        }
 
-                    @Override
-                    public void onMapScreenShot(Bitmap bitmap, int i) {
-
+                        @Override
+                        public void onMapScreenShot(Bitmap bitmap, int i) {
+                            onMapScreenShot(bitmap);
+                        }
+                    }, mainHandler);
+                } catch (Throwable error) {
+                    if (snapshotCompleted.compareAndSet(false, true)) {
+                        synchronized (regionSnapshotLock) {
+                            pendingScreenShots.remove(snapshotCompleted);
+                        }
+                        LogUtil.e(CLASS_NAME, "takeSnapshot request", error);
+                        _result.error("snapshot_failed", "截图请求失败。", error.getMessage());
                     }
-                });
+                }
                 break;
             case Const.METHOD_MAP_TAKE_REGION_SNAPSHOT:
                 takeRegionSnapshot(call, result);
@@ -165,6 +213,10 @@ public class MapController
         if (topLeftValue == null || topRightValue == null || widthValue == null
                 || heightValue == null || timeoutValue == null) {
             result.error("invalid_arguments", "区域截图参数不完整", null);
+            return;
+        }
+        if (disposed.get()) {
+            result.error("map_disposed", "地图视图已销毁。", null);
             return;
         }
 
@@ -202,6 +254,13 @@ public class MapController
         RegionSnapshotSession session = null;
         try {
             session = new RegionSnapshotSession(width, height, result);
+            synchronized (regionSnapshotLock) {
+                if (disposed.get()) {
+                    session.abort("map_disposed", "地图视图已销毁。");
+                    return;
+                }
+                regionSnapshotSession = session;
+            }
             final RegionSnapshotSession activeSession = session;
             amap.getMapRegionSnapshot(topLeft, topRight, new Size(width, height),
                     new AMap.OnMapSnapshotListener() {
@@ -220,7 +279,8 @@ public class MapController
             }
         } catch (Throwable error) {
             if (session != null) {
-                session.abort();
+                session.abort("snapshot_rejected", "区域截图请求已取消");
+                return;
             } else {
                 releaseRegionSnapshot();
             }
@@ -231,6 +291,7 @@ public class MapController
     private void releaseRegionSnapshot() {
         synchronized (regionSnapshotLock) {
             regionSnapshotInProgress = false;
+            regionSnapshotSession = null;
         }
     }
 
@@ -249,7 +310,7 @@ public class MapController
         }
 
         synchronized void addTile(Rect rect, Bitmap bitmap, int state) {
-            if (finished) {
+            if (finished || disposed.get()) {
                 return;
             }
             if (rect == null || rect.isEmpty() || bitmap == null || bitmap.isRecycled()) {
@@ -258,11 +319,20 @@ public class MapController
             }
             hasTile = true;
             incomplete |= state != 1;
-            canvas.drawBitmap(bitmap, null, rect, null);
+            try {
+                canvas.drawBitmap(bitmap, null, rect, null);
+            } catch (Throwable error) {
+                LogUtil.e(CLASS_NAME, "regionSnapshot.addTile", error);
+                completeError("snapshot_failed", "区域截图瓦片处理失败");
+            }
         }
 
         synchronized void finish() {
             if (finished) {
+                return;
+            }
+            if (disposed.get()) {
+                completeError("map_disposed", "地图视图已销毁");
                 return;
             }
             if (!hasTile) {
@@ -274,28 +344,34 @@ public class MapController
                 return;
             }
 
-            final ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            if (!output.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                completeError("snapshot_failed", "区域截图 PNG 编码失败");
-                return;
+            try {
+                final ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                if (!output.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                    completeError("snapshot_failed", "区域截图 PNG 编码失败");
+                    return;
+                }
+                finished = true;
+                mainHandler.removeCallbacks(this);
+                final byte[] bytes = stream.toByteArray();
+                recycleOutput();
+                releaseRegionSnapshot();
+                mainHandler.post(() -> result.success(bytes));
+            } catch (Throwable error) {
+                LogUtil.e(CLASS_NAME, "regionSnapshot.finish", error);
+                completeError("snapshot_failed", "区域截图处理失败");
             }
-            finished = true;
-            mainHandler.removeCallbacks(this);
-            final byte[] bytes = stream.toByteArray();
-            output.recycle();
-            releaseRegionSnapshot();
-            mainHandler.post(() -> result.success(bytes));
         }
 
         synchronized boolean isFinished() {
             return finished;
         }
 
-        synchronized void abort() {
+        synchronized void abort(String code, String message) {
             if (!finished) {
                 finished = true;
                 mainHandler.removeCallbacks(this);
-                output.recycle();
+                recycleOutput();
+                mainHandler.post(() -> result.error(code, message, null));
             }
             releaseRegionSnapshot();
         }
@@ -310,24 +386,78 @@ public class MapController
         private void completeError(String code, String message) {
             finished = true;
             mainHandler.removeCallbacks(this);
-            output.recycle();
+            recycleOutput();
             releaseRegionSnapshot();
             mainHandler.post(() -> result.error(code, message, null));
+        }
+
+        private void recycleOutput() {
+            if (!output.isRecycled()) {
+                output.recycle();
+            }
+        }
+    }
+
+    /** Releases SDK listeners and invalidates callbacks before TextureMapView is destroyed. */
+    public void dispose() {
+        if (!disposed.compareAndSet(false, true)) {
+            return;
+        }
+
+        MethodChannel.Result pendingMapReady = mapReadyResult;
+        mapReadyResult = null;
+        if (pendingMapReady != null) {
+            pendingMapReady.error("map_disposed", "地图视图已销毁。", null);
+        }
+
+        List<MethodChannel.Result> pendingScreenShotResults = new java.util.ArrayList<>();
+        synchronized (regionSnapshotLock) {
+            for (Map.Entry<AtomicBoolean, MethodChannel.Result> entry : pendingScreenShots.entrySet()) {
+                if (entry.getKey().compareAndSet(false, true)) {
+                    pendingScreenShotResults.add(entry.getValue());
+                }
+            }
+            pendingScreenShots.clear();
+        }
+        for (MethodChannel.Result pendingScreenShot : pendingScreenShotResults) {
+            pendingScreenShot.error("map_disposed", "地图视图已销毁。", null);
+        }
+
+        RegionSnapshotSession pendingSnapshot;
+        synchronized (regionSnapshotLock) {
+            pendingSnapshot = regionSnapshotSession;
+        }
+        if (pendingSnapshot != null) {
+            pendingSnapshot.abort("map_disposed", "地图视图已销毁。");
+        }
+
+        if (amap != null) {
+            amap.removeOnMapLoadedListener(this);
+            amap.removeOnMyLocationChangeListener(this);
+            amap.removeOnCameraChangeListener(this);
+            amap.removeOnMapLongClickListener(this);
+            amap.removeOnMapClickListener(this);
+            amap.removeOnPOIClickListener(this);
         }
     }
 
     @Override
     public void onMapLoaded() {
         LogUtil.i(CLASS_NAME, "onMapLoaded==>");
-        try {
-            mapLoaded = true;
-            if (null != mapReadyResult) {
-                mapReadyResult.success(null);
-                mapReadyResult = null;
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
             }
-        } catch (Throwable e) {
-            LogUtil.e(CLASS_NAME, "onMapLoaded", e);
-        }
+            try {
+                mapLoaded = true;
+                if (null != mapReadyResult) {
+                    mapReadyResult.success(null);
+                    mapReadyResult = null;
+                }
+            } catch (Throwable e) {
+                LogUtil.e(CLASS_NAME, "onMapLoaded", e);
+            }
+        });
     }
 
     @Override
@@ -435,63 +565,81 @@ public class MapController
 
     @Override
     public void onMyLocationChange(Location location) {
-        if (null != methodChannel && myLocationShowing) {
+        mainHandler.post(() -> {
+            if (disposed.get() || !myLocationShowing) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("location", ConvertUtil.location2Map(location));
             methodChannel.invokeMethod("location#changed", arguments);
             LogUtil.i(CLASS_NAME, "onMyLocationChange===>" + arguments);
-        }
+        });
     }
 
     @Override
     public void onCameraChange(CameraPosition cameraPosition) {
-        if (null != methodChannel) {
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("position", ConvertUtil.cameraPositionToMap(cameraPosition));
             methodChannel.invokeMethod("camera#onMove", arguments);
             LogUtil.i(CLASS_NAME, "onCameraChange===>" + arguments);
-        }
+        });
     }
 
     @Override
     public void onCameraChangeFinish(CameraPosition cameraPosition) {
-        if (null != methodChannel) {
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("position", ConvertUtil.cameraPositionToMap(cameraPosition));
             methodChannel.invokeMethod("camera#onMoveEnd", arguments);
             LogUtil.i(CLASS_NAME, "onCameraChangeFinish===>" + arguments);
-        }
+        });
     }
 
 
     @Override
     public void onMapClick(LatLng latLng) {
-        if (null != methodChannel) {
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("latLng", ConvertUtil.latLngToList(latLng));
             methodChannel.invokeMethod("map#onTap", arguments);
             LogUtil.i(CLASS_NAME, "onMapClick===>" + arguments);
-        }
+        });
     }
 
     @Override
     public void onMapLongClick(LatLng latLng) {
-        if (null != methodChannel) {
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("latLng", ConvertUtil.latLngToList(latLng));
             methodChannel.invokeMethod("map#onLongPress", arguments);
             LogUtil.i(CLASS_NAME, "onMapLongClick===>" + arguments);
-        }
+        });
     }
 
     @Override
     public void onPOIClick(Poi poi) {
-        if (null != methodChannel) {
+        mainHandler.post(() -> {
+            if (disposed.get()) {
+                return;
+            }
             final Map<String, Object> arguments = new HashMap<String, Object>(2);
             arguments.put("poi", ConvertUtil.poiToMap(poi));
             methodChannel.invokeMethod("map#onPoiTouched", arguments);
             LogUtil.i(CLASS_NAME, "onPOIClick===>" + arguments);
-        }
+        });
     }
 
     private void moveCamera(CameraUpdate cameraUpdate, Object animatedObject, Object durationObject) {
