@@ -7,6 +7,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.lifecycle.DefaultLifecycleObserver;
+import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 
 import com.amap.api.maps.AMap;
@@ -22,6 +23,7 @@ import com.amap.flutter.map2.utils.LogUtil;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.BinaryMessenger;
@@ -52,7 +54,14 @@ public class AMapPlatformView
     private PolylinesController polylinesController;
     private PolygonsController polygonsController;
     private TextureMapView mapView;
-    private boolean disposed = false;
+    /**
+     * Lifecycle callbacks and PlatformView.dispose() can both try to tear down
+     * the same TextureMapView.  The SDK's native delegate is not safe to destroy
+     * twice, so this state must be claimed before entering native code.
+     */
+    private final AtomicBoolean disposed = new AtomicBoolean(false);
+    private Lifecycle mapLifecycle;
+    private boolean mapCreated;
 
     AMapPlatformView(int id,
                      Context context,
@@ -73,9 +82,27 @@ public class AMapPlatformView
             polylinesController = new PolylinesController(methodChannel, amap);
             polygonsController = new PolygonsController(methodChannel, amap);
             initMyMethodCallHandlerMap();
-            lifecycleProvider.getLifecycle().addObserver(this);
+            Lifecycle lifecycle = lifecycleProvider == null ? null : lifecycleProvider.getLifecycle();
+            if (lifecycle != null) {
+                mapLifecycle = lifecycle;
+                lifecycle.addObserver(this);
+            } else {
+                throw new IllegalStateException("AMap lifecycle owner is unavailable");
+            }
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "<init>", e);
+            try {
+                destroyMapViewIfNecessary();
+            } catch (Throwable cleanupError) {
+                LogUtil.e(CLASS_NAME, "<init> cleanup", cleanupError);
+            }
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            if (e instanceof Error) {
+                throw (Error) e;
+            }
+            throw new IllegalStateException("AMap platform view initialization failed", e);
         }
     }
 
@@ -137,6 +164,10 @@ public class AMapPlatformView
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         LogUtil.i(CLASS_NAME, "onMethodCall==>" + call.method + ", arguments==> " + call.arguments);
+        if (disposed.get()) {
+            result.error("map_disposed", "地图视图已销毁。", null);
+            return;
+        }
         String methodId = call.method;
         if (myMethodCallHandlerMap.containsKey(methodId)) {
             Objects.requireNonNull(myMethodCallHandlerMap.get(methodId)).doMethodCall(call, result);
@@ -151,11 +182,12 @@ public class AMapPlatformView
     public void onCreate(@NonNull LifecycleOwner owner) {
         LogUtil.i(CLASS_NAME, "onCreate==>");
         try {
-            if (disposed) {
+            if (disposed.get() || mapCreated) {
                 return;
             }
             if (null != mapView) {
                 mapView.onCreate(null);
+                mapCreated = true;
             }
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "onCreate", e);
@@ -171,7 +203,7 @@ public class AMapPlatformView
     public void onResume(@NonNull LifecycleOwner owner) {
         LogUtil.i(CLASS_NAME, "onResume==>");
         try {
-            if (disposed) {
+            if (disposed.get()) {
                 return;
             }
             if (null != mapView) {
@@ -186,10 +218,12 @@ public class AMapPlatformView
     public void onPause(@NonNull LifecycleOwner owner) {
         LogUtil.i(CLASS_NAME, "onPause==>");
         try {
-            if (disposed) {
+            if (disposed.get()) {
                 return;
             }
-            mapView.onPause();
+            if (mapView != null) {
+                mapView.onPause();
+            }
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "onPause", e);
         }
@@ -204,9 +238,6 @@ public class AMapPlatformView
     public void onDestroy(@NonNull LifecycleOwner owner) {
         LogUtil.i(CLASS_NAME, "onDestroy==>");
         try {
-            if (disposed) {
-                return;
-            }
             destroyMapViewIfNecessary();
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "onDestroy", e);
@@ -215,12 +246,14 @@ public class AMapPlatformView
 
     @Override
     public void onSaveInstanceState(@NonNull Bundle bundle) {
-        LogUtil.i(CLASS_NAME, "onDestroy==>");
+        LogUtil.i(CLASS_NAME, "onSaveInstanceState==>");
         try {
-            if (disposed) {
+            if (disposed.get()) {
                 return;
             }
-            mapView.onSaveInstanceState(bundle);
+            if (mapView != null) {
+                mapView.onSaveInstanceState(bundle);
+            }
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "onSaveInstanceState", e);
         }
@@ -228,15 +261,9 @@ public class AMapPlatformView
 
     @Override
     public void onRestoreInstanceState(@Nullable Bundle bundle) {
-        LogUtil.i(CLASS_NAME, "onDestroy==>");
-        try {
-            if (disposed) {
-                return;
-            }
-            mapView.onCreate(bundle);
-        } catch (Throwable e) {
-            LogUtil.e(CLASS_NAME, "onRestoreInstanceState", e);
-        }
+        // TextureMapView is created exactly once in onCreate(). Calling
+        // onCreate() from restore would create the native map delegate twice.
+        LogUtil.i(CLASS_NAME, "onRestoreInstanceState ignored; state is restored by onCreate");
     }
 
 
@@ -250,22 +277,63 @@ public class AMapPlatformView
     public void dispose() {
         LogUtil.i(CLASS_NAME, "dispose==>");
         try {
-            if (disposed) {
-                return;
-            }
-            methodChannel.setMethodCallHandler(null);
             destroyMapViewIfNecessary();
-            disposed = true;
         } catch (Throwable e) {
             LogUtil.e(CLASS_NAME, "dispose", e);
         }
     }
 
     private void destroyMapViewIfNecessary() {
-        if (mapView == null) {
+        if (!disposed.compareAndSet(false, true)) {
             return;
         }
-        mapView.onDestroy();
+        methodChannel.setMethodCallHandler(null);
+
+        if (mapLifecycle != null) {
+            mapLifecycle.removeObserver(this);
+            mapLifecycle = null;
+        }
+
+        // Detach plugin listeners before destroying the native map. Each
+        // controller is allowed to finish its own pending callbacks safely.
+        try {
+            if (mapController != null) {
+                mapController.dispose();
+            }
+        } catch (Throwable error) {
+            LogUtil.e(CLASS_NAME, "dispose map controller", error);
+        }
+        try {
+            if (markersController != null) {
+                markersController.dispose();
+            }
+        } catch (Throwable error) {
+            LogUtil.e(CLASS_NAME, "dispose marker controller", error);
+        }
+        try {
+            if (polylinesController != null) {
+                polylinesController.dispose();
+            }
+        } catch (Throwable error) {
+            LogUtil.e(CLASS_NAME, "dispose polyline controller", error);
+        }
+        try {
+            if (polygonsController != null) {
+                polygonsController.dispose();
+            }
+        } catch (Throwable error) {
+            LogUtil.e(CLASS_NAME, "dispose polygon controller", error);
+        }
+
+        TextureMapView view = mapView;
+        mapView = null;
+        if (view != null) {
+            try {
+                view.onDestroy();
+            } catch (Throwable error) {
+                LogUtil.e(CLASS_NAME, "destroy TextureMapView", error);
+            }
+        }
     }
 
 

@@ -14,6 +14,7 @@ import com.amap.flutter.map2.utils.ConvertUtil;
 import com.amap.flutter.map2.utils.LogUtil;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -29,6 +30,7 @@ public class PolygonsController
         implements MyMethodCallHandler {
 
     private static final String CLASS_NAME = "PolygonsController";
+    private boolean disposed;
 
     public PolygonsController(MethodChannel methodChannel, AMap amap) {
         super(methodChannel, amap);
@@ -48,6 +50,19 @@ public class PolygonsController
     @Override
     public String[] getRegisterMethodIdArray() {
         return Const.METHOD_ID_LIST_FOR_POLYGON;
+    }
+
+    /** Removes polygon objects before the underlying map is destroyed. */
+    public void dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        for (PolygonController controller : new ArrayList<>(controllerMapByDartId.values())) {
+            controller.remove();
+        }
+        controllerMapByDartId.clear();
+        idMapByOverlyId.clear();
     }
 
     /**

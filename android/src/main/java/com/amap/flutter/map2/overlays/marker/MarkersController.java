@@ -16,6 +16,7 @@ import com.amap.flutter.map2.utils.ConvertUtil;
 import com.amap.flutter.map2.utils.LogUtil;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ public class MarkersController
         AMap.OnPOIClickListener {
     private static final String CLASS_NAME = "MarkersController";
     private String selectedMarkerDartId;
+    private boolean disposed;
 
     public MarkersController(MethodChannel methodChannel, AMap amap) {
         super(methodChannel, amap);
@@ -50,6 +52,24 @@ public class MarkersController
     @Override
     public String[] getRegisterMethodIdArray() {
         return Const.METHOD_ID_LIST_FOR_MARKER;
+    }
+
+    /** Detaches SDK listeners and removes marker objects before map destruction. */
+    public void dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        amap.removeOnMarkerClickListener(this);
+        amap.removeOnMarkerDragListener(this);
+        amap.removeOnMapClickListener(this);
+        amap.removeOnPOIClickListener(this);
+        for (MarkerController controller : new ArrayList<>(controllerMapByDartId.values())) {
+            controller.remove();
+        }
+        controllerMapByDartId.clear();
+        idMapByOverlyId.clear();
+        selectedMarkerDartId = null;
     }
 
 
@@ -174,11 +194,17 @@ public class MarkersController
 
     @Override
     public void onMapClick(LatLng latLng) {
+        if (disposed) {
+            return;
+        }
         hideMarkerInfoWindow(selectedMarkerDartId, null);
     }
 
     @Override
     public boolean onMarkerClick(Marker marker) {
+        if (disposed) {
+            return false;
+        }
         String dartId = idMapByOverlyId.get(marker.getId());
         if (null == dartId) {
             return false;
@@ -196,6 +222,9 @@ public class MarkersController
      * 将高德地图 Marker 拖拽事件转换为 Dart Marker ID 和坐标后发送到 Flutter。
      */
     private void invokeMarkerDragEvent(String methodName, Marker marker) {
+        if (disposed) {
+            return;
+        }
         String markerId = marker.getId();
         String dartId = idMapByOverlyId.get(markerId);
         LatLng latLng = marker.getPosition();
@@ -227,6 +256,9 @@ public class MarkersController
 
     @Override
     public void onPOIClick(Poi poi) {
+        if (disposed) {
+            return;
+        }
         hideMarkerInfoWindow(selectedMarkerDartId, null != poi ? poi.getCoordinate() : null);
     }
 
